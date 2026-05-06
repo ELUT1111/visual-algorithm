@@ -2,7 +2,8 @@
 
 class App {
     constructor() {
-        this.wsClient = new WSClient(`ws://${location.host}/ws/run`);
+        const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.wsClient = new WSClient(`${wsProto}//${location.host}/ws/run`);
         this.graphEditor = new GraphEditor('graph-container');
         this.visualizer = new Visualizer(this.graphEditor);
         this.algorithmPanel = new AlgorithmPanel(this.wsClient, this.visualizer, this.graphEditor);

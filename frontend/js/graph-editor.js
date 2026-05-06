@@ -99,7 +99,6 @@ class GraphEditor {
                 hover: true,
                 tooltipDelay: 200,
                 multiselect: true,
-                multiselectKeyboard: true,
                 navigationButtons: false,
                 keyboard: { enabled: false }
             },
