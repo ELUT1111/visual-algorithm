@@ -84,6 +84,31 @@ class Visualizer {
             case 'add_message':
                 // Messages are handled by the algorithm panel
                 break;
+
+            case 'add_node':
+                this.editor.addNodeDynamic(value.id, value.label, value.x, value.y);
+                break;
+
+            case 'add_edge':
+                this.editor.addEdgeDynamic(value.source, value.target, value.label || '');
+                break;
+
+            case 'remove_node':
+                this.editor.removeNodeDynamic(targetId);
+                break;
+
+            case 'remove_edge':
+                this.editor.removeEdgeDynamic(targetId);
+                break;
+
+            case 'update_node_position':
+                this.editor.updateNodePosition(targetId, value.x, value.y);
+                break;
+        }
+
+        // Handle layout hint from step
+        if (step.layout_hint) {
+            this.editor.setLayoutMode(step.layout_hint);
         }
     }
 

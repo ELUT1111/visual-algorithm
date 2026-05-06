@@ -42,13 +42,59 @@ class AlgorithmPanel {
             categories[algo.category].push(algo);
         });
 
-        Object.entries(categories).forEach(([cat, algos]) => {
+        const categoryOrder = ['graph', 'tree'];
+        const categoryLabels = {
+            graph: { emoji: '📊', label: 'Graph Algorithms' },
+            tree: { emoji: '🌲', label: 'Tree Algorithms' }
+        };
+
+        const orderedCats = [
+            ...categoryOrder.filter(c => categories[c]),
+            ...Object.keys(categories).filter(c => !categoryOrder.includes(c))
+        ];
+
+        orderedCats.forEach(cat => {
+            const algos = categories[cat];
+            const catInfo = categoryLabels[cat] || { emoji: '📋', label: cat };
+
+            // Category header (collapsible)
+            const header = document.createElement('div');
+            header.className = 'category-header';
+
+            const catEmoji = document.createElement('span');
+            catEmoji.className = 'category-emoji';
+            catEmoji.textContent = catInfo.emoji;
+
+            const catLabel = document.createElement('span');
+            catLabel.className = 'category-label';
+            catLabel.textContent = catInfo.label;
+
+            const catCount = document.createElement('span');
+            catCount.className = 'category-count';
+            catCount.textContent = algos.length;
+
+            const catToggle = document.createElement('span');
+            catToggle.className = 'category-toggle';
+            catToggle.textContent = '▼';
+
+            header.appendChild(catEmoji);
+            header.appendChild(catLabel);
+            header.appendChild(catCount);
+            header.appendChild(catToggle);
+
+            const algoContainer = document.createElement('div');
+            algoContainer.className = 'category-algos';
+
+            header.addEventListener('click', () => {
+                const isCollapsed = algoContainer.classList.toggle('collapsed');
+                catToggle.textContent = isCollapsed ? '▶' : '▼';
+            });
+
             algos.forEach(algo => {
                 const card = document.createElement('div');
                 card.className = 'algo-card';
                 card.dataset.key = `${algo.category}/${algo.name}`;
 
-                // Use textContent for user-controlled data to prevent XSS
                 const emojiSpan = document.createElement('span');
                 emojiSpan.className = 'algo-emoji';
                 emojiSpan.textContent = algo.emoji || '';
@@ -67,17 +113,15 @@ class AlgorithmPanel {
                 infoDiv.appendChild(nameDiv);
                 infoDiv.appendChild(descDiv);
 
-                const badgeSpan = document.createElement('span');
-                badgeSpan.className = 'algo-badge';
-                badgeSpan.textContent = algo.category;
-
                 card.appendChild(emojiSpan);
                 card.appendChild(infoDiv);
-                card.appendChild(badgeSpan);
 
                 card.addEventListener('click', () => this._selectAlgorithm(algo, card));
-                container.appendChild(card);
+                algoContainer.appendChild(card);
             });
+
+            container.appendChild(header);
+            container.appendChild(algoContainer);
         });
     }
 
@@ -87,6 +131,11 @@ class AlgorithmPanel {
         card.classList.add('selected');
 
         this.selectedAlgorithm = `${algo.category}/${algo.name}`;
+
+        // Switch structure type based on algorithm category
+        const isTree = algo.category === 'tree';
+        this.editor.setStructureType(isTree ? 'tree' : 'graph');
+        document.getElementById('btn-set-root').style.display = isTree ? '' : 'none';
 
         // Show parameters
         const paramSection = document.getElementById('param-section');
@@ -211,9 +260,15 @@ class AlgorithmPanel {
         }
 
         const graph = this.editor.toJSON();
+
+        // Skip empty-graph check for tree construction algorithms
+        const algo_meta = this.algorithms.find(a => `${a.category}/${a.name}` === this.selectedAlgorithm);
+        const isTreeConstruction = algo_meta && algo_meta.layout === 'hierarchical';
         if (!graph.nodes || graph.nodes.length === 0) {
-            showToast('Graph has no nodes', 'error');
-            return false;
+            if (!isTreeConstruction) {
+                showToast('Graph has no nodes', 'error');
+                return false;
+            }
         }
 
         return true;
@@ -224,6 +279,16 @@ class AlgorithmPanel {
         document.getElementById('btn-pause').addEventListener('click', () => this._pause());
         document.getElementById('btn-step').addEventListener('click', () => this._step());
         document.getElementById('btn-reset').addEventListener('click', () => this._reset());
+
+        document.getElementById('btn-set-root').addEventListener('click', () => {
+            const sel = this.editor.network.getSelection();
+            if (sel.nodes.length > 0) {
+                this.editor.setRoot(sel.nodes[0]);
+                showToast(`Root set to node "${sel.nodes[0]}"`, 'success');
+            } else {
+                showToast('Select a node first, then click Set Root', 'error');
+            }
+        });
 
         const slider = document.getElementById('speed-slider');
         const label = document.getElementById('speed-label');
@@ -263,6 +328,11 @@ class AlgorithmPanel {
         this.editor.setMode('run');
         this._setStatus('running', 'Running');
         this._updateButtonStates();
+
+        // Switch to hierarchical layout for tree algorithms
+        if (this.selectedAlgorithm && this.selectedAlgorithm.startsWith('tree/')) {
+            this.editor.setLayoutMode('hierarchical');
+        }
 
         document.getElementById('step-log-content').innerHTML = '';
     }
@@ -317,6 +387,19 @@ class AlgorithmPanel {
         this.editor.setMode('edit');
         this.editor.resetAllStyles();
         this.visualizer.restoreOriginalLabels();
+
+        // Restore layout mode based on current structure type
+        if (this.editor.getStructureType() === 'tree') {
+            this.editor.setLayoutMode('hierarchical');
+        } else {
+            const graphData = this.editor.toJSON();
+            if (graphData.directed && graphData.root_id) {
+                this.editor.setLayoutMode('hierarchical');
+            } else {
+                this.editor.setLayoutMode('force');
+            }
+        }
+
         this._setStatus('', 'Ready');
         this._updateButtonStates();
         document.getElementById('step-log-content').innerHTML = '';
@@ -352,6 +435,9 @@ class AlgorithmPanel {
 
         this.ws.on('meta', (data) => {
             console.log('Algorithm meta:', data);
+            if (data.layout === 'hierarchical') {
+                this.editor.setLayoutMode('hierarchical');
+            }
         });
 
         this.ws.on('finished', () => {
@@ -363,6 +449,8 @@ class AlgorithmPanel {
             this._updateButtonStates();
             this._appendToLog('Algorithm completed!', 'result');
             showToast('Algorithm finished!', 'success');
+            // Auto-fit to show all nodes (important for tree construction algorithms)
+            setTimeout(() => this.editor.fitAll(), 200);
         });
 
         this.ws.on('paused', () => {

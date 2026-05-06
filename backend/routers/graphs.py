@@ -10,19 +10,22 @@ from backend.models.graph import Graph
 
 router = APIRouter()
 
-PRESETS_DIR = Path(__file__).parent.parent / "presets" / "graphs"
+GRAPHS_DIR = Path(__file__).parent.parent / "presets" / "graphs"
+TREES_DIR = Path(__file__).parent.parent / "presets" / "trees"
 
 
 def _load_preset_graphs() -> list[dict]:
     graphs = []
-    if PRESETS_DIR.exists():
-        for f in sorted(PRESETS_DIR.glob("*.json")):
-            try:
-                data = json.loads(f.read_text(encoding="utf-8"))
-                data.setdefault("id", f.stem)
-                graphs.append(data)
-            except Exception:
-                pass
+    for dir_path, default_category in [(GRAPHS_DIR, "graph"), (TREES_DIR, "tree")]:
+        if dir_path.exists():
+            for f in sorted(dir_path.glob("*.json")):
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    data.setdefault("id", f.stem)
+                    data.setdefault("category", default_category)
+                    graphs.append(data)
+                except Exception:
+                    pass
     return graphs
 
 

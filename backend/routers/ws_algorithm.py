@@ -64,14 +64,20 @@ async def run_algorithm_ws(websocket: WebSocket):
             if p.get("required") and not params.get(p["name"]):
                 raise ValueError(f"Parameter '{p['name']}' is required")
 
-        # Validate source/target nodes exist
-        node_ids = {n.id for n in graph.nodes}
-        for p in meta.parameters:
-            val = params.get(p["name"], "")
-            if val and val not in node_ids:
-                raise ValueError(f"Node '{val}' not found in graph")
+        # Skip node-ID validation for tree construction algorithms (they build the tree dynamically)
+        is_tree_construction = meta.layout == "hierarchical"
+        if not is_tree_construction:
+            node_ids = {n.id for n in graph.nodes}
+            # Only validate parameters that actually reference node IDs
+            node_param_names = {"source", "target", "start", "end", "from", "to"}
+            for p in meta.parameters:
+                pname = p["name"]
+                if p.get("type") == "node" or pname in node_param_names:
+                    val = params.get(pname, "")
+                    if val and val not in node_ids:
+                        raise ValueError(f"Node '{val}' not found in graph")
 
-        if not graph.nodes:
+        if not graph.nodes and not is_tree_construction:
             raise ValueError("Graph has no nodes")
 
         r = AlgorithmRunner(algo, graph, params)

@@ -1,0 +1,39 @@
+{
+  "name": "Large Binary Tree",
+  "description": "A 15-node binary tree for more interesting traversals",
+  "directed": true,
+  "root_id": "N1",
+  "nodes": [
+    {"id": "N1", "label": "N1"},
+    {"id": "N2", "label": "N2"},
+    {"id": "N3", "label": "N3"},
+    {"id": "N4", "label": "N4"},
+    {"id": "N5", "label": "N5"},
+    {"id": "N6", "label": "N6"},
+    {"id": "N7", "label": "N7"},
+    {"id": "N8", "label": "N8"},
+    {"id": "N9", "label": "N9"},
+    {"id": "N10", "label": "N10"},
+    {"id": "N11", "label": "N11"},
+    {"id": "N12", "label": "N12"},
+    {"id": "N13", "label": "N13"},
+    {"id": "N14", "label": "N14"},
+    {"id": "N15", "label": "N15"}
+  ],
+  "edges": [
+    {"source": "N1", "target": "N2", "directed": true},
+    {"source": "N1", "target": "N3", "directed": true},
+    {"source": "N2", "target": "N4", "directed": true},
+    {"source": "N2", "target": "N5", "directed": true},
+    {"source": "N3", "target": "N6", "directed": true},
+    {"source": "N3", "target": "N7", "directed": true},
+    {"source": "N4", "target": "N8", "directed": true},
+    {"source": "N4", "target": "N9", "directed": true},
+    {"source": "N5", "target": "N10", "directed": true},
+    {"source": "N5", "target": "N11", "directed": true},
+    {"source": "N6", "target": "N12", "directed": true},
+    {"source": "N6", "target": "N13", "directed": true},
+    {"source": "N7", "target": "N14", "directed": true},
+    {"source": "N7", "target": "N15", "directed": true}
+  ]
+}

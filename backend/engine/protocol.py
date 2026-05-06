@@ -25,6 +25,11 @@ class StepAction(str, Enum):
     MARK_CURRENT = "mark_current"
     MARK_PATH = "mark_path"
     RESET_ALL = "reset_all"
+    ADD_NODE = "add_node"
+    ADD_EDGE = "add_edge"
+    REMOVE_NODE = "remove_node"
+    REMOVE_EDGE = "remove_edge"
+    UPDATE_NODE_POSITION = "update_node_position"
 
 
 @dataclass
@@ -60,6 +65,7 @@ class AlgorithmMeta:
     space_complexity: str = ""
     use_cases: list[str] = field(default_factory=list)
     pseudocode: str = ""
+    layout: str = "force"  # "force" or "hierarchical"
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +80,7 @@ class AlgorithmMeta:
             "space_complexity": self.space_complexity,
             "use_cases": self.use_cases,
             "pseudocode": self.pseudocode,
+            "layout": self.layout,
         }
 
 

@@ -91,6 +91,16 @@ class App {
             showToast(enabled ? 'Physics enabled' : 'Physics disabled', 'info');
         });
 
+        // Fit all nodes in view
+        document.getElementById('btn-fit-all').addEventListener('click', () => {
+            this.graphEditor.fitAll();
+        });
+
+        // Focus on selected nodes
+        document.getElementById('btn-focus-selected').addEventListener('click', () => {
+            this.graphEditor.focusSelected();
+        });
+
         // Double-click to add node quickly
         this.graphEditor.network.on('doubleClick', async (params) => {
             if (params.nodes.length === 0 && params.edges.length === 0) {
@@ -155,6 +165,15 @@ class App {
                 return;
             }
 
+            // Ctrl+A select all nodes
+            if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+                if (!isInput) {
+                    e.preventDefault();
+                    this.graphEditor.selectAll();
+                    return;
+                }
+            }
+
             // Don't trigger other shortcuts when typing in inputs
             if (isInput) return;
 
@@ -175,6 +194,21 @@ class App {
                 case 'R':
                     e.preventDefault();
                     this.algorithmPanel._reset();
+                    break;
+                case 'f':
+                case 'F':
+                    e.preventDefault();
+                    this.graphEditor.fitAll();
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    e.preventDefault();
+                    this.graphEditor.deleteSelected();
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    this.graphEditor.network.unselectAll();
+                    if (this.graphEditor._applySelectionContrast) this.graphEditor._applySelectionContrast();
                     break;
             }
         });

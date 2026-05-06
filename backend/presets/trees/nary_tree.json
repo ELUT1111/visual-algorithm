@@ -1,0 +1,29 @@
+{
+  "name": "3-ary Tree",
+  "description": "A tree with 3 children per node (ternary tree)",
+  "directed": true,
+  "root_id": "R",
+  "nodes": [
+    {"id": "R", "label": "R"},
+    {"id": "A", "label": "A"},
+    {"id": "B", "label": "B"},
+    {"id": "C", "label": "C"},
+    {"id": "D", "label": "D"},
+    {"id": "E", "label": "E"},
+    {"id": "F", "label": "F"},
+    {"id": "G", "label": "G"},
+    {"id": "H", "label": "H"},
+    {"id": "I", "label": "I"}
+  ],
+  "edges": [
+    {"source": "R", "target": "A", "directed": true},
+    {"source": "R", "target": "B", "directed": true},
+    {"source": "R", "target": "C", "directed": true},
+    {"source": "A", "target": "D", "directed": true},
+    {"source": "A", "target": "E", "directed": true},
+    {"source": "A", "target": "F", "directed": true},
+    {"source": "B", "target": "G", "directed": true},
+    {"source": "B", "target": "H", "directed": true},
+    {"source": "C", "target": "I", "directed": true}
+  ]
+}

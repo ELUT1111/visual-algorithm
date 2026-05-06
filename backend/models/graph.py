@@ -36,5 +36,6 @@ class Graph(BaseModel):
     name: str = "Untitled Graph"
     description: str = ""
     directed: bool = False
+    root_id: str | None = None
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)

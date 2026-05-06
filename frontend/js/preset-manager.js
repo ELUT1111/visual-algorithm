@@ -25,21 +25,46 @@ class PresetManager {
         const container = document.getElementById('preset-list');
         container.innerHTML = '';
 
-        this.presets.forEach(preset => {
-            const card = document.createElement('div');
-            card.className = 'preset-card';
-            card.innerHTML = `
-                <span>📊</span>
-                <span>${preset.name}</span>
-            `;
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                this.editor.loadFromJSON(preset);
-                showToast(`Loaded: ${preset.name}`, 'success');
-            });
-            container.appendChild(card);
+        const graphPresets = this.presets.filter(p => p.category !== 'tree');
+        const treePresets = this.presets.filter(p => p.category === 'tree');
+
+        if (graphPresets.length > 0) {
+            const label = document.createElement('div');
+            label.className = 'preset-group-label';
+            label.textContent = 'Graph Presets';
+            container.appendChild(label);
+            graphPresets.forEach(preset => this._renderPresetCard(container, preset, '📊'));
+        }
+
+        if (treePresets.length > 0) {
+            const label = document.createElement('div');
+            label.className = 'preset-group-label';
+            label.textContent = 'Tree Presets';
+            container.appendChild(label);
+            treePresets.forEach(preset => this._renderPresetCard(container, preset, '🌲'));
+        }
+    }
+
+    _renderPresetCard(container, preset, emoji) {
+        const card = document.createElement('div');
+        card.className = 'preset-card';
+
+        const emojiSpan = document.createElement('span');
+        emojiSpan.textContent = emoji;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = preset.name;
+
+        card.appendChild(emojiSpan);
+        card.appendChild(nameSpan);
+
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            this.editor.loadFromJSON(preset);
+            showToast(`Loaded: ${preset.name}`, 'success');
         });
+        container.appendChild(card);
     }
 
     _setupButtons() {

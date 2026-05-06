@@ -1,0 +1,23 @@
+{
+  "name": "Binary Tree",
+  "description": "A balanced binary tree for traversal algorithms",
+  "directed": true,
+  "root_id": "A",
+  "nodes": [
+    {"id": "A", "label": "A"},
+    {"id": "B", "label": "B"},
+    {"id": "C", "label": "C"},
+    {"id": "D", "label": "D"},
+    {"id": "E", "label": "E"},
+    {"id": "F", "label": "F"},
+    {"id": "G", "label": "G"}
+  ],
+  "edges": [
+    {"source": "A", "target": "B", "directed": true},
+    {"source": "A", "target": "C", "directed": true},
+    {"source": "B", "target": "D", "directed": true},
+    {"source": "B", "target": "E", "directed": true},
+    {"source": "C", "target": "F", "directed": true},
+    {"source": "C", "target": "G", "directed": true}
+  ]
+}
