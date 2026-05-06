@@ -1,0 +1,23 @@
+{
+  "name": "City Road Network",
+  "description": "A sample city road network with weighted edges representing distances in km",
+  "directed": false,
+  "nodes": [
+    {"id": "A", "label": "Downtown"},
+    {"id": "B", "label": "Airport"},
+    {"id": "C", "label": "University"},
+    {"id": "D", "label": "Hospital"},
+    {"id": "E", "label": "Mall"},
+    {"id": "F", "label": "Stadium"}
+  ],
+  "edges": [
+    {"source": "A", "target": "B", "weight": 7, "label": "7"},
+    {"source": "A", "target": "C", "weight": 3, "label": "3"},
+    {"source": "B", "target": "D", "weight": 2, "label": "2"},
+    {"source": "C", "target": "D", "weight": 4, "label": "4"},
+    {"source": "C", "target": "E", "weight": 5, "label": "5"},
+    {"source": "D", "target": "F", "weight": 6, "label": "6"},
+    {"source": "E", "target": "F", "weight": 1, "label": "1"},
+    {"source": "B", "target": "F", "weight": 8, "label": "8"}
+  ]
+}

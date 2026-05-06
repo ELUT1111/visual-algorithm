@@ -1,0 +1,23 @@
+{
+  "name": "Weighted DAG",
+  "description": "A directed acyclic graph for testing shortest path algorithms",
+  "directed": true,
+  "nodes": [
+    {"id": "S", "label": "Start"},
+    {"id": "A", "label": "A"},
+    {"id": "B", "label": "B"},
+    {"id": "C", "label": "C"},
+    {"id": "D", "label": "D"},
+    {"id": "T", "label": "Target"}
+  ],
+  "edges": [
+    {"source": "S", "target": "A", "weight": 4, "label": "4", "directed": true},
+    {"source": "S", "target": "B", "weight": 2, "label": "2", "directed": true},
+    {"source": "A", "target": "C", "weight": 3, "label": "3", "directed": true},
+    {"source": "A", "target": "D", "weight": 7, "label": "7", "directed": true},
+    {"source": "B", "target": "A", "weight": 1, "label": "1", "directed": true},
+    {"source": "B", "target": "D", "weight": 5, "label": "5", "directed": true},
+    {"source": "C", "target": "T", "weight": 2, "label": "2", "directed": true},
+    {"source": "D", "target": "T", "weight": 3, "label": "3", "directed": true}
+  ]
+}

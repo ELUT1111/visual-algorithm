@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Algorithm Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+    <header id="app-header">
+        <div class="header-left">
+            <h1><span class="emoji-icon">🧪</span> Visual Algorithm Lab</h1>
+        </div>
+        <div class="header-right">
+            <span class="status-badge" id="status-badge">Ready</span>
+        </div>
+    </header>
+
+    <div id="app-body">
+        <aside id="sidebar">
+            <!-- Algorithm Selector -->
+            <section class="sidebar-section" id="algorithm-section">
+                <h3><span class="emoji-icon">📋</span> Algorithms</h3>
+                <div id="algorithm-list"></div>
+            </section>
+
+            <!-- Parameters -->
+            <section class="sidebar-section" id="param-section" style="display:none;">
+                <h3><span class="emoji-icon">⚙️</span> Parameters</h3>
+                <div id="param-form"></div>
+            </section>
+
+            <!-- Preset Graphs -->
+            <section class="sidebar-section" id="preset-section">
+                <h3><span class="emoji-icon">📁</span> Preset Graphs</h3>
+                <div id="preset-list"></div>
+                <div class="preset-actions">
+                    <button class="btn btn-sm" id="btn-import"><span class="emoji-icon">📥</span> Import JSON</button>
+                    <button class="btn btn-sm" id="btn-export"><span class="emoji-icon">📤</span> Export JSON</button>
+                </div>
+            </section>
+
+            <!-- Custom Algorithm -->
+            <section class="sidebar-section" id="custom-section">
+                <h3><span class="emoji-icon">💻</span> Custom Algorithm</h3>
+                <div id="code-editor-container">
+                    <textarea id="code-editor" spellcheck="false"></textarea>
+                </div>
+                <button class="btn btn-primary btn-sm" id="btn-submit-code"><span class="emoji-icon">🚀</span> Submit Algorithm</button>
+            </section>
+        </aside>
+
+        <main id="main-content">
+            <!-- Graph Visualization -->
+            <div id="graph-container"></div>
+
+            <!-- Control Bar -->
+            <div id="control-bar">
+                <div class="controls-left">
+                    <button class="btn btn-control" id="btn-play" title="Play (Space)"><span>▶️</span></button>
+                    <button class="btn btn-control" id="btn-pause" title="Pause (Space)" disabled><span>⏸️</span></button>
+                    <button class="btn btn-control" id="btn-step" title="Step (→)"><span>⏭️</span></button>
+                    <button class="btn btn-control" id="btn-reset" title="Reset (R)"><span>🔄</span></button>
+                </div>
+                <div class="controls-center">
+                    <div class="speed-control">
+                        <label>🐢</label>
+                        <input type="range" id="speed-slider" min="50" max="2000" value="500" step="50">
+                        <label>🐇</label>
+                        <span id="speed-label">500ms</span>
+                    </div>
+                </div>
+                <div class="controls-right">
+                    <div class="graph-tools">
+                        <button class="btn btn-tool" id="btn-add-node" title="Add Node"><span>➕</span> Node</button>
+                        <button class="btn btn-tool" id="btn-add-edge" title="Add Edge"><span>🔗</span> Edge</button>
+                        <button class="btn btn-tool" id="btn-delete" title="Delete"><span>🗑️</span> Delete</button>
+                        <button class="btn btn-tool" id="btn-toggle-physics" title="Toggle Physics"><span>🌀</span> Physics</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step Log -->
+            <div id="step-log">
+                <div id="step-log-content"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="file-input" accept=".json" style="display:none;">
+
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/ws-client.js"></script>
+    <script src="/static/js/graph-editor.js"></script>
+    <script src="/static/js/visualizer.js"></script>
+    <script src="/static/js/algorithm-panel.js"></script>
+    <script src="/static/js/code-editor.js"></script>
+    <script src="/static/js/preset-manager.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

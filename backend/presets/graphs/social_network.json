@@ -1,0 +1,27 @@
+{
+  "name": "Social Network",
+  "description": "An unweighted social network graph for testing BFS",
+  "directed": false,
+  "nodes": [
+    {"id": "Alice", "label": "Alice"},
+    {"id": "Bob", "label": "Bob"},
+    {"id": "Carol", "label": "Carol"},
+    {"id": "Dave", "label": "Dave"},
+    {"id": "Eve", "label": "Eve"},
+    {"id": "Frank", "label": "Frank"},
+    {"id": "Grace", "label": "Grace"},
+    {"id": "Heidi", "label": "Heidi"}
+  ],
+  "edges": [
+    {"source": "Alice", "target": "Bob", "weight": 1, "label": ""},
+    {"source": "Alice", "target": "Carol", "weight": 1, "label": ""},
+    {"source": "Bob", "target": "Dave", "weight": 1, "label": ""},
+    {"source": "Bob", "target": "Eve", "weight": 1, "label": ""},
+    {"source": "Carol", "target": "Eve", "weight": 1, "label": ""},
+    {"source": "Carol", "target": "Frank", "weight": 1, "label": ""},
+    {"source": "Dave", "target": "Grace", "weight": 1, "label": ""},
+    {"source": "Eve", "target": "Grace", "weight": 1, "label": ""},
+    {"source": "Eve", "target": "Heidi", "weight": 1, "label": ""},
+    {"source": "Frank", "target": "Heidi", "weight": 1, "label": ""}
+  ]
+}
