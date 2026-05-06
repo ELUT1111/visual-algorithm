@@ -124,10 +124,10 @@ class Visualizer {
 
     storeOriginalLabels() {
         this.editor.nodes.get().forEach(n => {
-            n._originalLabel = n.label;
+            n._originalLabel = n.label || String(n.id);
         });
         this.editor.edges.get().forEach(e => {
-            e._originalLabel = e.label;
+            e._originalLabel = e.label || '';
         });
     }
 

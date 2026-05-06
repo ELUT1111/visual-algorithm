@@ -22,25 +22,61 @@ async def run_algorithm_ws(websocket: WebSocket):
 
     async def _execute_loop():
         nonlocal speed
-        while runner and runner.state in (RunState.RUNNING, RunState.STEPPING):
-            await runner.wait_if_paused()
-            if runner.state == RunState.PAUSED:
-                break
+        try:
+            while runner and runner.state in (RunState.RUNNING, RunState.STEPPING):
+                await runner.wait_if_paused()
+                if runner.state == RunState.PAUSED:
+                    break
 
-            step = runner.advance()
-            if step is None:
-                await websocket.send_json({"type": "finished"})
-                break
+                step = runner.advance()
+                if step is None:
+                    await websocket.send_json({"type": "finished"})
+                    break
 
-            await websocket.send_json({"type": "step", "data": step.to_dict()})
+                await websocket.send_json({"type": "step", "data": step.to_dict()})
 
-            if runner.state == RunState.STEPPING:
-                runner.state = RunState.PAUSED
-                runner._pause_event.clear()
-                await websocket.send_json({"type": "paused"})
-                break
+                if runner.state == RunState.STEPPING:
+                    runner.state = RunState.PAUSED
+                    runner._pause_event.clear()
+                    await websocket.send_json({"type": "paused"})
+                    break
 
-            await asyncio.sleep(runner.speed)
+                await asyncio.sleep(runner.speed)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "data": {"message": f"Algorithm error: {e}"},
+                })
+            except Exception:
+                pass
+
+    def _create_runner(algo_key: str, graph_data: dict, params: dict, spd: float):
+        """Create and validate a runner. Raises on failure."""
+        algo = registry.get(algo_key)
+        graph = Graph(**graph_data)
+
+        # Validate required params
+        meta = algo.get_meta()
+        for p in meta.parameters:
+            if p.get("required") and not params.get(p["name"]):
+                raise ValueError(f"Parameter '{p['name']}' is required")
+
+        # Validate source/target nodes exist
+        node_ids = {n.id for n in graph.nodes}
+        for p in meta.parameters:
+            val = params.get(p["name"], "")
+            if val and val not in node_ids:
+                raise ValueError(f"Node '{val}' not found in graph")
+
+        if not graph.nodes:
+            raise ValueError("Graph has no nodes")
+
+        r = AlgorithmRunner(algo, graph, params)
+        r.speed = spd
+        return r
 
     try:
         while True:
@@ -54,15 +90,12 @@ async def run_algorithm_ws(websocket: WebSocket):
                 speed = msg.get("speed", 500) / 1000.0
 
                 try:
-                    algo = registry.get(algo_key)
-                    graph = Graph(**graph_data)
-                    runner = AlgorithmRunner(algo, graph, params)
-                    runner.speed = speed
+                    runner = _create_runner(algo_key, graph_data, params, speed)
                     runner.start()
 
                     await websocket.send_json({
                         "type": "meta",
-                        "data": algo.get_meta().to_dict(),
+                        "data": runner.algorithm.get_meta().to_dict(),
                     })
 
                     exec_task = asyncio.create_task(_execute_loop())
@@ -83,11 +116,36 @@ async def run_algorithm_ws(websocket: WebSocket):
                     exec_task = asyncio.create_task(_execute_loop())
 
             elif command == "step":
-                if runner:
-                    if runner.state == RunState.IDLE:
+                # First step: create runner if needed
+                if runner is None:
+                    algo_key = msg.get("algorithm_key", "")
+                    graph_data = msg.get("graph", {})
+                    params = msg.get("params", {})
+                    speed = msg.get("speed", 500) / 1000.0
+                    if not algo_key:
+                        await websocket.send_json({
+                            "type": "error",
+                            "data": {"message": "Please select an algorithm first"},
+                        })
+                        continue
+                    try:
+                        runner = _create_runner(algo_key, graph_data, params, speed)
                         runner.start()
-                    runner.step_forward()
-                    exec_task = asyncio.create_task(_execute_loop())
+
+                        await websocket.send_json({
+                            "type": "meta",
+                            "data": runner.algorithm.get_meta().to_dict(),
+                        })
+                    except Exception as e:
+                        runner = None
+                        await websocket.send_json({
+                            "type": "error",
+                            "data": {"message": str(e)},
+                        })
+                        continue
+
+                runner.step_forward()
+                exec_task = asyncio.create_task(_execute_loop())
 
             elif command == "speed":
                 new_speed = msg.get("value", 500) / 1000.0

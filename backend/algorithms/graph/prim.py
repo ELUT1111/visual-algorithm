@@ -20,6 +20,29 @@ class PrimAlgorithm(AlgorithmProtocol):
                 {"name": "source", "type": "str", "required": False, "default": "", "description": "Start node (optional)"}
             ],
             requires_weighted=True,
+            time_complexity="O((V + E) log V)",
+            space_complexity="O(V)",
+            use_cases=[
+                "Network design (minimum cable length)",
+                "Cluster analysis",
+                "Approximation for TSP",
+                "Circuit board wiring optimization",
+            ],
+            pseudocode=(
+                "function Prim(graph, source):\n"
+                "    inMST = {source}\n"
+                "    totalWeight = 0\n"
+                "    edges = min-heap of edges from source\n"
+                "    while edges is not empty and |inMST| < |V|:\n"
+                "        (w, u, v) = edges.extractMin()\n"
+                "        if v in inMST: continue\n"
+                "        add v to inMST\n"
+                "        totalWeight += w\n"
+                "        for each edge (v, neighbor, w):\n"
+                "            if neighbor not in inMST:\n"
+                "                edges.insert(w, v, neighbor)\n"
+                "    return totalWeight, inMST"
+            ),
         )
 
     def run(self, graph, params) -> Generator[Step, None, None]:
@@ -115,14 +138,23 @@ class PrimAlgorithm(AlgorithmProtocol):
 
         # Highlight MST edges
         for u, v, w in mst_edges:
+            # Try both directions since vis-network may store edge either way
             edge_id = f"{u}-{v}"
             rev_id = f"{v}-{u}"
-            eid = edge_id
+            # We yield both; the visualizer/vis-network will handle whichever exists
             yield Step(
                 action=StepAction.HIGHLIGHT_EDGE,
                 target_type="edge",
-                target_id=eid,
+                target_id=edge_id,
                 value="path",
                 message=f"MST edge: {u} — {v} (weight={w})",
+                phase="result",
+            )
+            yield Step(
+                action=StepAction.HIGHLIGHT_EDGE,
+                target_type="edge",
+                target_id=rev_id,
+                value="path",
+                message="",
                 phase="result",
             )

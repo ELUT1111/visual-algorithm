@@ -20,6 +20,31 @@ class BFSAlgorithm(AlgorithmProtocol):
                 {"name": "source", "type": "str", "required": True, "description": "Source node ID"},
                 {"name": "target", "type": "str", "required": False, "default": "", "description": "Target node (optional)"},
             ],
+            time_complexity="O(V + E)",
+            space_complexity="O(V)",
+            use_cases=[
+                "Shortest path in unweighted graphs",
+                "Level-order tree traversal",
+                "Web crawling / link discovery",
+                "Finding connected components",
+                "Social network degree of separation",
+            ],
+            pseudocode=(
+                "function BFS(graph, source, target):\n"
+                "    queue = [source]\n"
+                "    visited = {source}\n"
+                "    parent = {source: null}\n"
+                "    while queue is not empty:\n"
+                "        current = queue.dequeue()\n"
+                "        if current == target:\n"
+                "            return reconstruct_path(parent)\n"
+                "        for each neighbor of current:\n"
+                "            if neighbor not in visited:\n"
+                "                visited.add(neighbor)\n"
+                "                parent[neighbor] = current\n"
+                "                queue.enqueue(neighbor)\n"
+                "    return null  // target not reachable"
+            ),
         )
 
     def run(self, graph, params) -> Generator[Step, None, None]:

@@ -20,13 +20,21 @@ class App {
             this.presetManager.init()
         ]);
 
-        // Load default graph if available
-        if (this.presetManager.presets.length > 0) {
+        // Restore from localStorage, or load default preset
+        const restored = this.graphEditor.restoreFromStorage();
+        if (!restored && this.presetManager.presets.length > 0) {
             this.graphEditor.loadFromJSON(this.presetManager.presets[0]);
         }
 
+        // Clear undo history after initial load
+        this.graphEditor._undoStack = [];
+        this.graphEditor._redoStack = [];
+
         // Setup interactive graph tools
         this._setupGraphTools();
+
+        // Setup undo/redo buttons
+        this._setupUndoRedo();
 
         // Setup keyboard shortcuts
         this._setupKeyboard();
@@ -35,9 +43,6 @@ class App {
     }
 
     _setupGraphTools() {
-        let addNodeMode = false;
-        let addEdgeMode = false;
-
         const btnAddNode = document.getElementById('btn-add-node');
         const btnAddEdge = document.getElementById('btn-add-edge');
         const btnDelete = document.getElementById('btn-delete');
@@ -99,12 +104,59 @@ class App {
         });
     }
 
+    _setupUndoRedo() {
+        const btnUndo = document.getElementById('btn-undo');
+        const btnRedo = document.getElementById('btn-redo');
+
+        btnUndo.addEventListener('click', () => this._doUndo());
+        btnRedo.addEventListener('click', () => this._doRedo());
+
+        // Update button states when graph changes
+        this._updateUndoRedoButtons();
+
+        // Periodically check undo/redo state (simple approach)
+        setInterval(() => this._updateUndoRedoButtons(), 500);
+    }
+
+    _doUndo() {
+        if (this.graphEditor.undo()) {
+            showToast('Undo', 'info');
+        }
+        this._updateUndoRedoButtons();
+    }
+
+    _doRedo() {
+        if (this.graphEditor.redo()) {
+            showToast('Redo', 'info');
+        }
+        this._updateUndoRedoButtons();
+    }
+
+    _updateUndoRedoButtons() {
+        const btnUndo = document.getElementById('btn-undo');
+        const btnRedo = document.getElementById('btn-redo');
+        if (btnUndo) btnUndo.disabled = !this.graphEditor.canUndo();
+        if (btnRedo) btnRedo.disabled = !this.graphEditor.canRedo();
+    }
+
     _setupKeyboard() {
         document.addEventListener('keydown', (e) => {
-            // Don't trigger shortcuts when typing in inputs
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+            const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT';
+
+            // Ctrl+Z / Ctrl+Y work even in inputs (standard behavior)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                this._doUndo();
                 return;
             }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+                e.preventDefault();
+                this._doRedo();
+                return;
+            }
+
+            // Don't trigger other shortcuts when typing in inputs
+            if (isInput) return;
 
             switch (e.key) {
                 case ' ':

@@ -56,6 +56,10 @@ class AlgorithmMeta:
     parameters: list[dict] = field(default_factory=list)
     requires_weighted: bool = False
     requires_directed: bool = False
+    time_complexity: str = ""
+    space_complexity: str = ""
+    use_cases: list[str] = field(default_factory=list)
+    pseudocode: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -66,6 +70,10 @@ class AlgorithmMeta:
             "parameters": self.parameters,
             "requires_weighted": self.requires_weighted,
             "requires_directed": self.requires_directed,
+            "time_complexity": self.time_complexity,
+            "space_complexity": self.space_complexity,
+            "use_cases": self.use_cases,
+            "pseudocode": self.pseudocode,
         }
 
 

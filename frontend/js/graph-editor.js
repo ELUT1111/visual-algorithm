@@ -9,6 +9,10 @@ class GraphEditor {
         this.mode = 'edit'; // 'edit' | 'view' | 'run'
         this._nextNodeId = 1;
         this._directed = false;
+        this._saveTimer = null;
+        this._undoStack = [];
+        this._redoStack = [];
+        this._maxHistory = 50;
         this._init();
     }
 
@@ -117,6 +121,9 @@ class GraphEditor {
     }
 
     loadFromJSON(graphData) {
+        if (this.nodes.length > 0 || this.edges.length > 0) {
+            this._pushUndo();
+        }
         this.nodes.clear();
         this.edges.clear();
         this._directed = graphData.directed || false;
@@ -130,7 +137,8 @@ class GraphEditor {
             shape: n.shape || 'dot',
             size: n.size || 28,
             title: n.label || n.id,
-            _metadata: n.metadata || {}
+            _metadata: n.metadata || {},
+            _originalLabel: n.label || n.id
         }));
 
         const visEdges = (graphData.edges || []).map(e => ({
@@ -152,6 +160,8 @@ class GraphEditor {
         setTimeout(() => {
             this.network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
         }, 100);
+
+        this._scheduleSave();
     }
 
     toJSON() {
@@ -187,6 +197,7 @@ class GraphEditor {
             showToast(`Node "${id}" already exists`, 'error');
             return null;
         }
+        this._pushUndo();
         const pos = this.network.getViewPosition();
         const canvasPos = x !== undefined ?
             this.network.canvas.DOMtoCanvas({ x, y }) :
@@ -199,6 +210,7 @@ class GraphEditor {
             y: canvasPos.y,
             title: id
         });
+        this._scheduleSave();
         return id;
     }
 
@@ -208,6 +220,7 @@ class GraphEditor {
             showToast('Edge already exists', 'error');
             return null;
         }
+        this._pushUndo();
         this.edges.add({
             id: edgeId,
             from: fromId,
@@ -217,13 +230,17 @@ class GraphEditor {
             arrows: (directed || this._directed) ? { to: { enabled: true, scaleFactor: 0.8 } } : undefined,
             _weight: weight
         });
+        this._scheduleSave();
         return edgeId;
     }
 
     deleteSelected() {
         const selection = this.network.getSelection();
+        if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+        this._pushUndo();
         selection.nodes.forEach(id => this.nodes.remove(id));
         selection.edges.forEach(id => this.edges.remove(id));
+        this._scheduleSave();
     }
 
     highlightNode(nodeId, colors) {
@@ -330,5 +347,102 @@ class GraphEditor {
 
     getNodeIds() {
         return this.nodes.get().map(n => n.id);
+    }
+
+    _scheduleSave() {
+        clearTimeout(this._saveTimer);
+        this._saveTimer = setTimeout(() => {
+            try {
+                const data = this.toJSON();
+                localStorage.setItem('val_graph', JSON.stringify(data));
+            } catch (e) { /* quota exceeded etc */ }
+        }, 500);
+    }
+
+    // --- Undo / Redo ---
+
+    _pushUndo() {
+        const snapshot = JSON.stringify(this.toJSON());
+        this._undoStack.push(snapshot);
+        if (this._undoStack.length > this._maxHistory) {
+            this._undoStack.shift();
+        }
+        this._redoStack = [];
+    }
+
+    canUndo() {
+        return this._undoStack.length > 0;
+    }
+
+    canRedo() {
+        return this._redoStack.length > 0;
+    }
+
+    undo() {
+        if (!this.canUndo()) return false;
+        // Save current state to redo stack
+        this._redoStack.push(JSON.stringify(this.toJSON()));
+        // Restore previous state
+        const snapshot = this._undoStack.pop();
+        const data = JSON.parse(snapshot);
+        this._restoreSnapshot(data);
+        this._scheduleSave();
+        return true;
+    }
+
+    redo() {
+        if (!this.canRedo()) return false;
+        // Save current state to undo stack
+        this._undoStack.push(JSON.stringify(this.toJSON()));
+        // Restore next state
+        const snapshot = this._redoStack.pop();
+        const data = JSON.parse(snapshot);
+        this._restoreSnapshot(data);
+        this._scheduleSave();
+        return true;
+    }
+
+    _restoreSnapshot(data) {
+        this.nodes.clear();
+        this.edges.clear();
+        this._directed = data.directed || false;
+
+        const visNodes = (data.nodes || []).map(n => ({
+            id: n.id,
+            label: n.label || n.id,
+            x: n.x,
+            y: n.y,
+            title: n.label || n.id,
+            _metadata: n.metadata || {},
+            _originalLabel: n.label || n.id
+        }));
+
+        const visEdges = (data.edges || []).map(e => ({
+            id: e.id || `${e.source}-${e.target}`,
+            from: e.source,
+            to: e.target,
+            label: e.label || (e.weight !== 1 ? String(e.weight) : ''),
+            width: 2,
+            arrows: (e.directed || this._directed) ? { to: { enabled: true, scaleFactor: 0.8 } } : undefined,
+            _weight: e.weight,
+            _metadata: e.metadata || {}
+        }));
+
+        this.nodes.add(visNodes);
+        this.edges.add(visEdges);
+    }
+
+    restoreFromStorage() {
+        try {
+            const saved = localStorage.getItem('val_graph');
+            if (saved) {
+                const data = JSON.parse(saved);
+                if (data && data.nodes && data.nodes.length > 0) {
+                    this.loadFromJSON(data);
+                    return true;
+                }
+            }
+        } catch (e) {}
+        return false;
     }
 }

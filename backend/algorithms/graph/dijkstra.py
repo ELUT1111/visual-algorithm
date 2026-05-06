@@ -20,6 +20,29 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                 {"name": "source", "type": "str", "required": True, "description": "Source node ID"}
             ],
             requires_weighted=True,
+            time_complexity="O((V + E) log V)",
+            space_complexity="O(V)",
+            use_cases=[
+                "GPS navigation and mapping",
+                "Network routing protocols (OSPF)",
+                "Social network shortest connection",
+                "Game pathfinding on weighted grids",
+            ],
+            pseudocode=(
+                "function Dijkstra(graph, source):\n"
+                "    dist[source] = 0\n"
+                "    for each vertex v != source: dist[v] = infinity\n"
+                "    Q = priority queue with all vertices\n"
+                "    while Q is not empty:\n"
+                "        u = vertex in Q with min dist[u]\n"
+                "        remove u from Q\n"
+                "        for each neighbor v of u:\n"
+                "            alt = dist[u] + weight(u, v)\n"
+                "            if alt < dist[v]:\n"
+                "                dist[v] = alt\n"
+                "                prev[v] = u\n"
+                "    return dist, prev"
+            ),
         )
 
     def run(self, graph, params) -> Generator[Step, None, None]:

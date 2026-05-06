@@ -21,6 +21,9 @@ class AlgorithmPanel {
     async _loadAlgorithms() {
         try {
             const response = await fetch('/api/algorithms');
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
             this.algorithms = await response.json();
             this._renderAlgorithmCards();
         } catch (e) {
@@ -44,14 +47,34 @@ class AlgorithmPanel {
                 const card = document.createElement('div');
                 card.className = 'algo-card';
                 card.dataset.key = `${algo.category}/${algo.name}`;
-                card.innerHTML = `
-                    <span class="algo-emoji">${algo.emoji}</span>
-                    <div class="algo-info">
-                        <div class="algo-name">${algo.name}</div>
-                        <div class="algo-desc">${algo.description}</div>
-                    </div>
-                    <span class="algo-badge">${algo.category}</span>
-                `;
+
+                // Use textContent for user-controlled data to prevent XSS
+                const emojiSpan = document.createElement('span');
+                emojiSpan.className = 'algo-emoji';
+                emojiSpan.textContent = algo.emoji || '';
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'algo-info';
+
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'algo-name';
+                nameDiv.textContent = algo.name;
+
+                const descDiv = document.createElement('div');
+                descDiv.className = 'algo-desc';
+                descDiv.textContent = algo.description;
+
+                infoDiv.appendChild(nameDiv);
+                infoDiv.appendChild(descDiv);
+
+                const badgeSpan = document.createElement('span');
+                badgeSpan.className = 'algo-badge';
+                badgeSpan.textContent = algo.category;
+
+                card.appendChild(emojiSpan);
+                card.appendChild(infoDiv);
+                card.appendChild(badgeSpan);
+
                 card.addEventListener('click', () => this._selectAlgorithm(algo, card));
                 container.appendChild(card);
             });
@@ -80,19 +103,35 @@ class AlgorithmPanel {
                 const group = document.createElement('div');
                 group.className = 'param-group';
 
+                const label = document.createElement('label');
+                label.textContent = param.description || param.name;
+                group.appendChild(label);
+
                 if (param.type === 'node' || (param.name === 'source' || param.name === 'target' || param.name === 'start')) {
-                    group.innerHTML = `
-                        <label>${param.description || param.name}</label>
-                        <select id="param-${param.name}">
-                            <option value="">-- Select Node --</option>
-                            ${nodeIds.map(id => `<option value="${id}" ${param.default === id ? 'selected' : ''}>${id}</option>`).join('')}
-                        </select>
-                    `;
+                    const select = document.createElement('select');
+                    select.id = `param-${param.name}`;
+
+                    const defaultOpt = document.createElement('option');
+                    defaultOpt.value = '';
+                    defaultOpt.textContent = '-- Select Node --';
+                    select.appendChild(defaultOpt);
+
+                    nodeIds.forEach(id => {
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.textContent = id;
+                        if (param.default === id) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+
+                    group.appendChild(select);
                 } else {
-                    group.innerHTML = `
-                        <label>${param.description || param.name}</label>
-                        <input type="text" id="param-${param.name}" value="${param.default || ''}" placeholder="${param.description || param.name}">
-                    `;
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = `param-${param.name}`;
+                    input.value = param.default || '';
+                    input.placeholder = param.description || param.name;
+                    group.appendChild(input);
                 }
                 paramForm.appendChild(group);
             });
@@ -103,6 +142,37 @@ class AlgorithmPanel {
 
         document.getElementById('status-badge').textContent = `Selected: ${algo.emoji} ${algo.name}`;
         document.getElementById('status-badge').className = 'status-badge';
+
+        // Populate education panel
+        this._renderEduPanel(algo);
+    }
+
+    _renderEduPanel(algo) {
+        const section = document.getElementById('edu-section');
+        const hasEdu = algo.time_complexity || (algo.use_cases && algo.use_cases.length > 0) || algo.pseudocode;
+        if (!hasEdu) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        document.getElementById('edu-title').textContent = `${algo.emoji} ${algo.name}`;
+
+        const timeEl = document.getElementById('edu-time');
+        const spaceEl = document.getElementById('edu-space');
+        timeEl.textContent = algo.time_complexity || '—';
+        spaceEl.textContent = algo.space_complexity || '—';
+
+        const listEl = document.getElementById('edu-usecases');
+        listEl.innerHTML = '';
+        (algo.use_cases || []).forEach(uc => {
+            const li = document.createElement('li');
+            li.textContent = uc;
+            listEl.appendChild(li);
+        });
+
+        const codeEl = document.getElementById('edu-pseudocode');
+        codeEl.textContent = algo.pseudocode || '';
     }
 
     _collectParams() {
@@ -121,6 +191,34 @@ class AlgorithmPanel {
         return params;
     }
 
+    _validateParams() {
+        if (!this.selectedAlgorithm) {
+            showToast('Please select an algorithm first', 'error');
+            return false;
+        }
+
+        const algo = this.algorithms.find(a => `${a.category}/${a.name}` === this.selectedAlgorithm);
+        if (!algo) return false;
+
+        const params = this._collectParams();
+        for (const param of (algo.parameters || [])) {
+            if (param.required && !params[param.name]) {
+                showToast(`Parameter '${param.description || param.name}' is required`, 'error');
+                const el = document.getElementById(`param-${param.name}`);
+                if (el) el.focus();
+                return false;
+            }
+        }
+
+        const graph = this.editor.toJSON();
+        if (!graph.nodes || graph.nodes.length === 0) {
+            showToast('Graph has no nodes', 'error');
+            return false;
+        }
+
+        return true;
+    }
+
     _setupControls() {
         document.getElementById('btn-play').addEventListener('click', () => this._play());
         document.getElementById('btn-pause').addEventListener('click', () => this._pause());
@@ -137,15 +235,13 @@ class AlgorithmPanel {
     }
 
     _play() {
-        if (!this.selectedAlgorithm) {
-            showToast('Please select an algorithm first', 'error');
-            return;
-        }
+        if (!this._validateParams()) return;
 
         if (this.isPaused) {
             this.ws.send('resume');
             this.isPaused = false;
             this._setStatus('running', 'Running');
+            this._updateButtonStates();
             return;
         }
 
@@ -176,30 +272,36 @@ class AlgorithmPanel {
             this.ws.send('pause');
             this.isPaused = true;
             this._setStatus('paused', 'Paused');
+            this._updateButtonStates();
         }
     }
 
     _step() {
-        if (!this.selectedAlgorithm) {
-            showToast('Please select an algorithm first', 'error');
-            return;
-        }
+        if (!this._validateParams()) return;
 
         if (!this.isRunning) {
-            // First step - need to start
+            // First step: send 'start' command so backend creates the runner
             const graph = this.editor.toJSON();
             const params = this._collectParams();
             this.visualizer.storeOriginalLabels();
-            this.ws.send('step', {
+
+            this.ws.send('start', {
                 algorithm_key: this.selectedAlgorithm,
                 graph: graph,
                 params: params,
                 speed: this.currentSpeed
             });
+
+            // Then immediately pause — the backend will start and we'll pause on first step
             this.isRunning = true;
-            this.isPaused = true;
+            this.isPaused = false;
             this.editor.setMode('run');
-            this._setStatus('paused', 'Stepping');
+            this._setStatus('running', 'Running');
+            document.getElementById('step-log-content').innerHTML = '';
+
+            // After start, immediately pause so we only get one step
+            // We'll pause after the first step arrives
+            this._pendingStepPause = true;
         } else {
             this.ws.send('step');
             this._setStatus('paused', 'Stepping');
@@ -211,6 +313,7 @@ class AlgorithmPanel {
         this.ws.send('reset');
         this.isRunning = false;
         this.isPaused = false;
+        this._pendingStepPause = false;
         this.editor.setMode('edit');
         this.editor.resetAllStyles();
         this.visualizer.restoreOriginalLabels();
@@ -237,6 +340,14 @@ class AlgorithmPanel {
             if (data.message) {
                 this._appendToLog(data.message, data.phase || 'explore');
             }
+            // If we started via step button, pause after first step
+            if (this._pendingStepPause) {
+                this._pendingStepPause = false;
+                this.ws.send('pause');
+                this.isPaused = true;
+                this._setStatus('paused', 'Stepping');
+                this._updateButtonStates();
+            }
         });
 
         this.ws.on('meta', (data) => {
@@ -246,6 +357,7 @@ class AlgorithmPanel {
         this.ws.on('finished', () => {
             this.isRunning = false;
             this.isPaused = false;
+            this._pendingStepPause = false;
             this.editor.setMode('view');
             this._setStatus('finished', 'Finished');
             this._updateButtonStates();
@@ -272,6 +384,7 @@ class AlgorithmPanel {
             this._appendToLog(`Error: ${data.message}`, 'result');
             this.isRunning = false;
             this.isPaused = false;
+            this._pendingStepPause = false;
             this._setStatus('', 'Error');
             this._updateButtonStates();
         });
@@ -281,10 +394,17 @@ class AlgorithmPanel {
         const log = document.getElementById('step-log-content');
         const entry = document.createElement('div');
         entry.className = 'log-entry';
-        entry.innerHTML = `
-            <span class="log-phase ${phase}">${phase}</span>
-            <span class="log-msg">${message}</span>
-        `;
+
+        const phaseSpan = document.createElement('span');
+        phaseSpan.className = `log-phase ${phase}`;
+        phaseSpan.textContent = phase;
+
+        const msgSpan = document.createElement('span');
+        msgSpan.className = 'log-msg';
+        msgSpan.textContent = message;
+
+        entry.appendChild(phaseSpan);
+        entry.appendChild(msgSpan);
         log.appendChild(entry);
         log.scrollTop = log.scrollHeight;
     }

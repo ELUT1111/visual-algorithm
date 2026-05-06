@@ -7,6 +7,9 @@ class WSClient {
         this.handlers = new Map();
         this.reconnectDelay = 1000;
         this._shouldReconnect = true;
+        this._connected = false;
+        this._firstConnect = true;
+        this._reconnectAttempts = 0;
     }
 
     connect() {
@@ -14,7 +17,17 @@ class WSClient {
 
         this.ws.onopen = () => {
             console.log('[WS] Connected');
+            this._connected = true;
             this.reconnectDelay = 1000;
+
+            if (this._firstConnect) {
+                this._firstConnect = false;
+            } else if (this._reconnectAttempts > 0) {
+                showToast('Reconnected to server', 'success');
+            }
+
+            this._reconnectAttempts = 0;
+            this._updateConnectionUI(true);
         };
 
         this.ws.onmessage = (event) => {
@@ -31,7 +44,14 @@ class WSClient {
 
         this.ws.onclose = () => {
             console.log('[WS] Disconnected');
+            this._connected = false;
+
             if (this._shouldReconnect) {
+                this._reconnectAttempts++;
+                if (this._reconnectAttempts === 1) {
+                    showToast('Connection lost, reconnecting...', 'error');
+                }
+                this._updateConnectionUI(false);
                 setTimeout(() => this.connect(), this.reconnectDelay);
                 this.reconnectDelay = Math.min(this.reconnectDelay * 2, 10000);
             }
@@ -40,6 +60,25 @@ class WSClient {
         this.ws.onerror = (err) => {
             console.error('[WS] Error:', err);
         };
+    }
+
+    _updateConnectionUI(connected) {
+        const badge = document.getElementById('status-badge');
+        if (!connected && badge) {
+            badge.textContent = 'Disconnected';
+            badge.className = 'status-badge';
+            badge.style.background = 'rgba(248, 113, 113, 0.15)';
+            badge.style.color = '#f87171';
+        } else if (connected && badge && badge.textContent === 'Disconnected') {
+            badge.textContent = 'Ready';
+            badge.className = 'status-badge';
+            badge.style.background = '';
+            badge.style.color = '';
+        }
+    }
+
+    get isConnected() {
+        return this._connected;
     }
 
     on(messageType, callback) {
@@ -51,6 +90,7 @@ class WSClient {
             this.ws.send(JSON.stringify({ command, ...data }));
         } else {
             console.warn('[WS] Not connected, cannot send');
+            showToast('Not connected to server', 'error');
         }
     }
 

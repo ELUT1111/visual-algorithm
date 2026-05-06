@@ -11,12 +11,14 @@ from backend.engine.protocol import AlgorithmMeta, AlgorithmProtocol
 class AlgorithmRegistry:
     def __init__(self) -> None:
         self._algorithms: dict[str, type[AlgorithmProtocol]] = {}
+        self._meta_cache: dict[str, AlgorithmMeta] = {}
 
     def register(self, cls: type[AlgorithmProtocol]) -> type[AlgorithmProtocol]:
         instance = cls()
         meta = instance.get_meta()
         key = f"{meta.category}/{meta.name}"
         self._algorithms[key] = cls
+        self._meta_cache[key] = meta
         return cls
 
     def get(self, key: str) -> AlgorithmProtocol:
@@ -26,9 +28,7 @@ class AlgorithmRegistry:
 
     def list_all(self, category: str | None = None) -> list[AlgorithmMeta]:
         result = []
-        for key, cls in self._algorithms.items():
-            instance = cls()
-            meta = instance.get_meta()
+        for key, meta in self._meta_cache.items():
             if category is None or meta.category == category:
                 result.append(meta)
         return result

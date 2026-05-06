@@ -40,6 +40,27 @@ class KruskalAlgorithm(AlgorithmProtocol):
             emoji="🔗",
             parameters=[],
             requires_weighted=True,
+            time_complexity="O(E log E)",
+            space_complexity="O(V + E)",
+            use_cases=[
+                "Network design (connecting all nodes cheaply)",
+                "Clustering (remove heaviest edges)",
+                "Image segmentation",
+                "Approximation algorithms",
+            ],
+            pseudocode=(
+                "function Kruskal(graph):\n"
+                "    sort all edges by weight\n"
+                "    UF = UnionFind(all vertices)\n"
+                "    mst = []\n"
+                "    for each edge (u, v, w) in sorted order:\n"
+                "        if UF.find(u) != UF.find(v):\n"
+                "            UF.union(u, v)\n"
+                "            mst.append((u, v, w))\n"
+                "        else:\n"
+                "            skip  // would create cycle\n"
+                "    return mst"
+            ),
         )
 
     def run(self, graph, params) -> Generator[Step, None, None]:

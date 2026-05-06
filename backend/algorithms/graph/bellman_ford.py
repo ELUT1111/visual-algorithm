@@ -19,6 +19,29 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                 {"name": "source", "type": "str", "required": True, "description": "Source node ID"}
             ],
             requires_weighted=True,
+            time_complexity="O(V * E)",
+            space_complexity="O(V)",
+            use_cases=[
+                "Graphs with negative edge weights",
+                "Detecting negative cycles",
+                "Currency arbitrage detection",
+                "Network flow with costs",
+            ],
+            pseudocode=(
+                "function BellmanFord(graph, source):\n"
+                "    dist[source] = 0\n"
+                "    for each vertex v != source: dist[v] = infinity\n"
+                "    repeat (V - 1) times:\n"
+                "        for each edge (u, v, w) in graph:\n"
+                "            if dist[u] + w < dist[v]:\n"
+                "                dist[v] = dist[u] + w\n"
+                "                prev[v] = u\n"
+                "    // Check for negative cycles\n"
+                "    for each edge (u, v, w) in graph:\n"
+                "        if dist[u] + w < dist[v]:\n"
+                "            report \"Negative cycle detected\"\n"
+                "    return dist, prev"
+            ),
         )
 
     def run(self, graph, params) -> Generator[Step, None, None]:
@@ -160,14 +183,29 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
         has_negative_cycle = False
         for edge in graph.edges:
             u, v, w = edge.source, edge.target, edge.weight
+            edge_id_fwd = edge.id or f"{u}-{v}"
+            edge_id_rev = f"{v}-{u}"
+
             if distances[u] != float("inf") and distances[u] + w < distances[v]:
                 has_negative_cycle = True
                 yield Step(
                     action=StepAction.HIGHLIGHT_EDGE,
                     target_type="edge",
-                    target_id=edge.id or f"{u}-{v}",
+                    target_id=edge_id_fwd,
                     value="path",
                     message=f"Negative cycle detected via edge {u} → {v}!",
+                    phase="result",
+                )
+                break
+
+            if not graph.directed and distances[v] != float("inf") and distances[v] + w < distances[u]:
+                has_negative_cycle = True
+                yield Step(
+                    action=StepAction.HIGHLIGHT_EDGE,
+                    target_type="edge",
+                    target_id=edge_id_rev,
+                    value="path",
+                    message=f"Negative cycle detected via edge {v} → {u}!",
                     phase="result",
                 )
                 break

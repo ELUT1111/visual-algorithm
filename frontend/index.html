@@ -33,6 +33,29 @@
                 <div id="param-form"></div>
             </section>
 
+            <!-- Algorithm Education Panel -->
+            <section class="sidebar-section" id="edu-section" style="display:none;">
+                <h3><span class="emoji-icon">📖</span> <span id="edu-title">Algorithm Info</span></h3>
+                <div id="edu-content">
+                    <div class="edu-row">
+                        <span class="edu-label">Time</span>
+                        <span class="edu-value edu-mono" id="edu-time"></span>
+                    </div>
+                    <div class="edu-row">
+                        <span class="edu-label">Space</span>
+                        <span class="edu-value edu-mono" id="edu-space"></span>
+                    </div>
+                    <div class="edu-block">
+                        <div class="edu-label">Use Cases</div>
+                        <ul id="edu-usecases" class="edu-list"></ul>
+                    </div>
+                    <div class="edu-block">
+                        <div class="edu-label">Pseudocode</div>
+                        <pre id="edu-pseudocode" class="edu-code"></pre>
+                    </div>
+                </div>
+            </section>
+
             <!-- Preset Graphs -->
             <section class="sidebar-section" id="preset-section">
                 <h3><span class="emoji-icon">📁</span> Preset Graphs</h3>
@@ -75,6 +98,9 @@
                 </div>
                 <div class="controls-right">
                     <div class="graph-tools">
+                        <button class="btn btn-tool" id="btn-undo" title="Undo (Ctrl+Z)" disabled><span>↩️</span></button>
+                        <button class="btn btn-tool" id="btn-redo" title="Redo (Ctrl+Y)" disabled><span>↪️</span></button>
+                        <span class="tool-divider"></span>
                         <button class="btn btn-tool" id="btn-add-node" title="Add Node"><span>➕</span> Node</button>
                         <button class="btn btn-tool" id="btn-add-edge" title="Add Edge"><span>🔗</span> Edge</button>
                         <button class="btn btn-tool" id="btn-delete" title="Delete"><span>🗑️</span> Delete</button>

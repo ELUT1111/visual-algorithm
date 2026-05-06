@@ -22,6 +22,32 @@ class AStarAlgorithm(AlgorithmProtocol):
                 {"name": "target", "type": "str", "required": True, "description": "Goal node ID"},
             ],
             requires_weighted=True,
+            time_complexity="O(E) best, O(b^d) worst",
+            space_complexity="O(V)",
+            use_cases=[
+                "Game pathfinding (NPCs, RTS)",
+                "Robot navigation and motion planning",
+                "Map routing with heuristics",
+                "Puzzle solving (8-puzzle, Rubik's cube)",
+            ],
+            pseudocode=(
+                "function AStar(graph, source, target, h):\n"
+                "    g[source] = 0\n"
+                "    f[source] = h(source, target)\n"
+                "    openSet = {source}\n"
+                "    while openSet is not empty:\n"
+                "        current = node in openSet with min f[]\n"
+                "        if current == target:\n"
+                "            return reconstruct_path()\n"
+                "        remove current from openSet\n"
+                "        for each neighbor of current:\n"
+                "            tentative_g = g[current] + weight(current, neighbor)\n"
+                "            if tentative_g < g[neighbor]:\n"
+                "                g[neighbor] = tentative_g\n"
+                "                f[neighbor] = g[neighbor] + h(neighbor, target)\n"
+                "                add neighbor to openSet\n"
+                "    return null  // no path found"
+            ),
         )
 
     def _heuristic(self, node_id, target_id, node_positions):

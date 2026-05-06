@@ -327,6 +327,14 @@ html, body {
     color: #fff;
 }
 
+.tool-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+    align-self: center;
+}
+
 /* ===== Main Content ===== */
 #main-content {
     flex: 1;
@@ -434,6 +442,76 @@ html, body {
     color: var(--text-primary);
 }
 
+/* ===== Education Panel ===== */
+#edu-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.edu-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.edu-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+    min-width: 36px;
+}
+.edu-block .edu-label {
+    min-width: auto;
+    margin-bottom: 4px;
+}
+.edu-value {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+.edu-mono {
+    font-family: var(--font-mono);
+    color: var(--accent-cyan);
+    font-size: 12px;
+    background: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+.edu-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.edu-list li {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding-left: 14px;
+    position: relative;
+}
+.edu-list li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--accent-blue);
+}
+.edu-code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
 /* ===== Code Editor ===== */
 #code-editor-container {
     margin-bottom: 8px;
@@ -538,6 +616,63 @@ html, body {
 @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+/* ===== Saved Algorithms List ===== */
+.saved-algos {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+.saved-algos-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+}
+.saved-algo-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.saved-algo-item:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-light);
+}
+.saved-algo-name {
+    flex: 1;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--accent-cyan);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.saved-algo-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.saved-algo-del {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    transition: color var(--transition);
+}
+.saved-algo-del:hover {
+    color: var(--accent-red);
 }
 
 /* ===== Node label overlay (distance display) ===== */
