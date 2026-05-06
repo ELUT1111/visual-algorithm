@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import ast
 import importlib
+import random
+import string
 import sys
 import uuid
 import tempfile
@@ -86,6 +88,103 @@ def get_algorithm(category: str, name: str):
         return algo.get_meta().to_dict()
     except KeyError:
         raise HTTPException(status_code=404, detail="Algorithm not found")
+
+
+# --- Random parameter generation ---
+
+# Complexity presets: (label, value_range_or_count)
+_COMPLEXITY = {
+    "simple":  {"count": (5, 8),  "order": 3},
+    "medium":  {"count": (8, 15), "order": 4},
+    "complex": {"count": (15, 25), "order": 5},
+}
+
+_COMMON_WORDS = [
+    "apple", "app", "apt", "bat", "bar", "bin", "bit", "cat", "car", "cap",
+    "dog", "dot", "dry", "egg", "end", "ear", "fox", "fun", "fog", "gap",
+    "get", "got", "hat", "hit", "hot", "ink", "ion", "ice", "jar", "jet",
+    "joy", "key", "kid", "kit", "log", "lot", "low", "map", "mix", "mud",
+    "net", "new", "nil", "nut", "oak", "odd", "oil", "opt", "pan", "peg",
+    "pet", "pin", "pot", "put", "ram", "red", "rig", "rod", "row", "rub",
+    "run", "sad", "set", "sip", "sir", "sit", "ski", "sob", "sow", "spy",
+    "sub", "sum", "sun", "tab", "tag", "tan", "tap", "tar", "tip", "toe",
+    "ton", "top", "try", "tub", "urn", "use", "van", "vet", "vow", "wad",
+    "war", "wax", "web", "wed", "wet", "who", "win", "wit", "woe", "wok",
+    "won", "woo", "yak", "yam", "yap", "yaw", "yea", "yes", "yet", "yew",
+    "zap", "zed", "zen", "zig", "zip", "zoo",
+]
+
+
+def _random_values(count: int, lo: int = 1, hi: int = 999) -> str:
+    """Generate comma-separated unique random integers."""
+    nums = random.sample(range(lo, hi + 1), min(count, hi - lo + 1))
+    return ",".join(str(n) for n in nums)
+
+
+def _random_words(count: int) -> str:
+    """Generate comma-separated random words."""
+    words = random.sample(_COMMON_WORDS, min(count, len(_COMMON_WORDS)))
+    return ",".join(words)
+
+
+def _random_text(length: int) -> str:
+    """Generate a random lowercase text string."""
+    return "".join(random.choices(string.ascii_lowercase, k=length))
+
+
+def _generate_params(algo_meta, graph_data: dict, complexity: str | None) -> dict:
+    """Generate random parameters for an algorithm."""
+    params = {}
+
+    # Pick complexity
+    if complexity not in _COMPLEXITY:
+        complexity = random.choice(list(_COMPLEXITY.keys()))
+    cfg = _COMPLEXITY[complexity]
+    count = random.randint(*cfg["count"])
+
+    node_ids = [n["id"] for n in graph_data.get("nodes", [])]
+    is_construction = algo_meta.layout == "hierarchical" and algo_meta.category == "tree"
+    is_traversal = algo_meta.layout == "hierarchical" and not is_construction
+
+    for p in algo_meta.parameters:
+        name = p["name"]
+
+        if name == "values":
+            params[name] = _random_values(count)
+        elif name == "words":
+            params[name] = _random_words(count)
+        elif name == "text":
+            params[name] = _random_text(count)
+        elif name == "order":
+            params[name] = str(cfg["order"])
+        elif name in ("source", "target", "start", "end", "from", "to"):
+            if node_ids:
+                params[name] = random.choice(node_ids)
+            else:
+                params[name] = p.get("default", "")
+        else:
+            params[name] = p.get("default", "")
+
+    return params
+
+
+class RandomParamsRequest(BaseModel):
+    algorithm_key: str
+    graph: dict = Field(default_factory=dict)
+    complexity: str | None = None  # "simple" | "medium" | "complex" | None=random
+
+
+@router.post("/random-params")
+def generate_random_params(req: RandomParamsRequest):
+    """Generate random parameters for a given algorithm."""
+    try:
+        algo = registry.get(req.algorithm_key)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Algorithm not found")
+
+    meta = algo.get_meta()
+    params = _generate_params(meta, req.graph, req.complexity)
+    return {"params": params, "complexity": req.complexity or "random"}
 
 
 @router.post("/custom")

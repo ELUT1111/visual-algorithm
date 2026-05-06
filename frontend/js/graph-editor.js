@@ -570,9 +570,11 @@ class GraphEditor {
     setMode(mode) {
         this.mode = mode;
         if (mode === 'run') {
+            // Disable layout engine so it doesn't override algorithm-computed positions
             this.network.setOptions({
                 interaction: { dragNodes: false, dragView: true, zoomView: true },
-                physics: { enabled: false }
+                physics: { enabled: false },
+                layout: { hierarchical: { enabled: false } }
             });
         } else {
             this.network.setOptions({
@@ -682,15 +684,17 @@ class GraphEditor {
 
     addNodeDynamic(id, label, x, y) {
         if (this.nodes.get(id)) return;
-        this.nodes.add({
+        const node = {
             id: id,
             label: label || id,
-            x: x || 0,
-            y: y || 0,
             title: label || id,
             _metadata: {},
             _originalLabel: label || id
-        });
+        };
+        // Only set position if explicitly provided; let vis-network layout handle otherwise
+        if (x !== undefined && x !== null) node.x = x;
+        if (y !== undefined && y !== null) node.y = y;
+        this.nodes.add(node);
     }
 
     addEdgeDynamic(fromId, toId, label) {

@@ -184,6 +184,14 @@ class AlgorithmPanel {
                 }
                 paramForm.appendChild(group);
             });
+
+            // Add random params button
+            const randomBtn = document.createElement('button');
+            randomBtn.className = 'btn btn-sm btn-random';
+            randomBtn.innerHTML = '<span class="emoji-icon">🎲</span> Random';
+            randomBtn.type = 'button';
+            randomBtn.addEventListener('click', () => this._generateRandomParams(algo));
+            paramForm.appendChild(randomBtn);
         } else {
             paramSection.style.display = 'none';
             paramForm.innerHTML = '';
@@ -222,6 +230,37 @@ class AlgorithmPanel {
 
         const codeEl = document.getElementById('edu-pseudocode');
         codeEl.textContent = algo.pseudocode || '';
+    }
+
+    async _generateRandomParams(algo) {
+        try {
+            const graph = this.editor.toJSON();
+            const resp = await fetch('/api/algorithms/random-params', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    algorithm_key: `${algo.category}/${algo.name}`,
+                    graph: { nodes: graph.nodes, edges: graph.edges },
+                    complexity: null  // random complexity
+                })
+            });
+            if (!resp.ok) throw new Error('Failed');
+            const data = await resp.json();
+            const params = data.params;
+
+            // Fill form fields
+            Object.entries(params).forEach(([name, value]) => {
+                const el = document.getElementById(`param-${name}`);
+                if (el) {
+                    el.value = value;
+                    // Trigger change event for select elements
+                    el.dispatchEvent(new Event('change'));
+                }
+            });
+            showToast(`Random params (${data.complexity})`, 'info');
+        } catch (e) {
+            showToast('Failed to generate random params', 'error');
+        }
     }
 
     _collectParams() {
@@ -328,11 +367,6 @@ class AlgorithmPanel {
         this.editor.setMode('run');
         this._setStatus('running', 'Running');
         this._updateButtonStates();
-
-        // Switch to hierarchical layout for tree algorithms
-        if (this.selectedAlgorithm && this.selectedAlgorithm.startsWith('tree/')) {
-            this.editor.setLayoutMode('hierarchical');
-        }
 
         document.getElementById('step-log-content').innerHTML = '';
     }
@@ -449,7 +483,10 @@ class AlgorithmPanel {
             this._updateButtonStates();
             this._appendToLog('Algorithm completed!', 'result');
             showToast('Algorithm finished!', 'success');
-            // Auto-fit to show all nodes (important for tree construction algorithms)
+            // Re-enable layout for tree algorithms, then fit
+            if (this.editor.getStructureType() === 'tree') {
+                this.editor.setLayoutMode('hierarchical');
+            }
             setTimeout(() => this.editor.fitAll(), 200);
         });
 

@@ -85,9 +85,21 @@ class Visualizer {
                 // Messages are handled by the algorithm panel
                 break;
 
-            case 'add_node':
-                this.editor.addNodeDynamic(value.id, value.label, value.x, value.y);
+            case 'add_node': {
+                let nx = value.x, ny = value.y;
+                // If parent_id is provided and no explicit position, place near parent
+                if ((nx === undefined || nx === null) && value.parent_id) {
+                    try {
+                        const parentPos = this.editor.network.getPosition(value.parent_id);
+                        if (parentPos) {
+                            nx = parentPos.x + (Math.random() - 0.5) * 60;
+                            ny = parentPos.y + 80;
+                        }
+                    } catch (e) { /* parent may not exist yet */ }
+                }
+                this.editor.addNodeDynamic(value.id, value.label, nx, ny);
                 break;
+            }
 
             case 'add_edge':
                 this.editor.addEdgeDynamic(value.source, value.target, value.label || '');

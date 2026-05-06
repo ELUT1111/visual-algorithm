@@ -297,6 +297,19 @@ html, body {
     background: #3a7ae6;
     border-color: #3a7ae6;
 }
+.btn-random {
+    width: 100%;
+    margin-top: 8px;
+    background: #2a2e3d;
+    border: 1px dashed #4a4e5e;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.btn-random:hover {
+    background: #353849;
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
 
 .btn-control {
     width: 42px;
