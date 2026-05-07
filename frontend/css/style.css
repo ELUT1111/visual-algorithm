@@ -30,7 +30,7 @@
     --header-height: 52px;
     --sidebar-width: 280px;
     --control-height: 56px;
-    --log-height: 140px;
+    --bottom-panel-height: 200px;
 }
 
 /* ===== Reset & Base ===== */
@@ -359,12 +359,52 @@ html, body {
 /* Graph Container */
 #graph-container {
     flex: 1;
+    min-height: 80px;
     background: var(--bg-primary);
     position: relative;
     overflow: hidden;
 }
 #graph-container .vis-manipulation {
     display: none !important;
+}
+
+/* Panel Resize Handle */
+#panel-resize-handle {
+    height: 7px;
+    cursor: ns-resize;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    transition: background var(--transition);
+}
+#panel-resize-handle:hover,
+#panel-resize-handle.dragging {
+    background: var(--accent-blue-dim);
+}
+.resize-handle-bar {
+    width: 36px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border-light);
+    transition: background var(--transition);
+}
+#panel-resize-handle:hover .resize-handle-bar,
+#panel-resize-handle.dragging .resize-handle-bar {
+    background: var(--accent-blue);
+}
+
+/* Bottom Panel (control bar + step log) */
+#bottom-panel {
+    height: var(--bottom-panel-height);
+    min-height: calc(var(--control-height) + 32px);
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
 /* Control Bar */
@@ -420,7 +460,8 @@ html, body {
 
 /* Step Log */
 #step-log {
-    height: var(--log-height);
+    flex: 1;
+    min-height: 0;
     background: var(--bg-secondary);
     overflow-y: auto;
     padding: 8px 16px;

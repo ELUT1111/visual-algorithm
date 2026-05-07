@@ -40,6 +40,9 @@ class App {
         // Setup keyboard shortcuts
         this._setupKeyboard();
 
+        // Setup resizable bottom panel
+        this._setupPanelResize();
+
         showToast('Visual Algorithm Lab ready!', 'success');
     }
 
@@ -148,6 +151,73 @@ class App {
         const btnRedo = document.getElementById('btn-redo');
         if (btnUndo) btnUndo.disabled = !this.graphEditor.canUndo();
         if (btnRedo) btnRedo.disabled = !this.graphEditor.canRedo();
+    }
+
+    _setupPanelResize() {
+        const handle = document.getElementById('panel-resize-handle');
+        const bottomPanel = document.getElementById('bottom-panel');
+        const mainContent = document.getElementById('main-content');
+        if (!handle || !bottomPanel || !mainContent) return;
+
+        const STORAGE_KEY = 'val_bottomPanelHeight';
+        const MIN_HEIGHT = 96;   // control bar (56) + 40 min log
+        const MAX_RATIO = 0.6;
+
+        // Restore saved height
+        const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+        if (!isNaN(saved)) {
+            const maxH = mainContent.clientHeight * MAX_RATIO;
+            const h = Math.max(MIN_HEIGHT, Math.min(saved, maxH));
+            bottomPanel.style.height = h + 'px';
+        }
+
+        let dragging = false;
+        let startY = 0;
+        let startH = 0;
+
+        const onMouseMove = (e) => {
+            if (!dragging) return;
+            const maxH = mainContent.clientHeight * MAX_RATIO;
+            const delta = startY - e.clientY;  // drag up = increase log height
+            const newH = Math.max(MIN_HEIGHT, Math.min(startH + delta, maxH));
+            bottomPanel.style.height = newH + 'px';
+            // Trigger vis-network resize so it redraws correctly
+            if (this.graphEditor && this.graphEditor.network) {
+                this.graphEditor.network.redraw();
+            }
+        };
+
+        const onMouseUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            handle.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            localStorage.setItem(STORAGE_KEY, parseInt(bottomPanel.style.height, 10));
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            dragging = true;
+            startY = e.clientY;
+            startH = bottomPanel.offsetHeight;
+            handle.classList.add('dragging');
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        // Double-click to reset to default
+        handle.addEventListener('dblclick', () => {
+            bottomPanel.style.height = '';
+            localStorage.removeItem(STORAGE_KEY);
+            if (this.graphEditor && this.graphEditor.network) {
+                this.graphEditor.network.redraw();
+            }
+        });
     }
 
     _setupKeyboard() {

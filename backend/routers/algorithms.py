@@ -153,6 +153,8 @@ def _generate_params(algo_meta, graph_data: dict, complexity: str | None) -> dic
             params[name] = _random_values(count)
         elif name == "words":
             params[name] = _random_words(count)
+        elif name == "patterns":
+            params[name] = _random_words(min(count, 5))
         elif name == "text":
             params[name] = _random_text(count)
         elif name == "order":

@@ -6,7 +6,7 @@
     <title>Visual Algorithm Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
@@ -80,41 +80,49 @@
             <!-- Graph Visualization -->
             <div id="graph-container"></div>
 
-            <!-- Control Bar -->
-            <div id="control-bar">
-                <div class="controls-left">
-                    <button class="btn btn-control" id="btn-play" title="Play (Space)"><span>▶️</span></button>
-                    <button class="btn btn-control" id="btn-pause" title="Pause (Space)" disabled><span>⏸️</span></button>
-                    <button class="btn btn-control" id="btn-step" title="Step (→)"><span>⏭️</span></button>
-                    <button class="btn btn-control" id="btn-reset" title="Reset (R)"><span>🔄</span></button>
-                </div>
-                <div class="controls-center">
-                    <div class="speed-control">
-                        <label>🐢</label>
-                        <input type="range" id="speed-slider" min="50" max="2000" value="500" step="50">
-                        <label>🐇</label>
-                        <span id="speed-label">500ms</span>
-                    </div>
-                </div>
-                <div class="controls-right">
-                    <div class="graph-tools">
-                        <button class="btn btn-tool" id="btn-undo" title="Undo (Ctrl+Z)" disabled><span>↩️</span></button>
-                        <button class="btn btn-tool" id="btn-redo" title="Redo (Ctrl+Y)" disabled><span>↪️</span></button>
-                        <span class="tool-divider"></span>
-                        <button class="btn btn-tool" id="btn-add-node" title="Add Node"><span>➕</span> Node</button>
-                        <button class="btn btn-tool" id="btn-add-edge" title="Add Edge"><span>🔗</span> Edge</button>
-                        <button class="btn btn-tool" id="btn-delete" title="Delete"><span>🗑️</span> Delete</button>
-                        <button class="btn btn-tool" id="btn-toggle-physics" title="Toggle Physics"><span>🌀</span> Physics</button>
-                        <button class="btn btn-tool" id="btn-fit-all" title="Fit all nodes in view (F)"><span>🔲</span> Fit</button>
-                        <button class="btn btn-tool" id="btn-focus-selected" title="Focus on selected nodes"><span>🎯</span> Focus</button>
-                        <button class="btn btn-tool" id="btn-set-root" title="Set selected node as root" style="display:none;"><span>🌳</span> Set Root</button>
-                    </div>
-                </div>
+            <!-- Resize Handle -->
+            <div id="panel-resize-handle" title="Drag to resize">
+                <div class="resize-handle-bar"></div>
             </div>
 
-            <!-- Step Log -->
-            <div id="step-log">
-                <div id="step-log-content"></div>
+            <!-- Bottom Panel (controls + log) -->
+            <div id="bottom-panel">
+                <!-- Control Bar -->
+                <div id="control-bar">
+                    <div class="controls-left">
+                        <button class="btn btn-control" id="btn-play" title="Play (Space)"><span>▶️</span></button>
+                        <button class="btn btn-control" id="btn-pause" title="Pause (Space)" disabled><span>⏸️</span></button>
+                        <button class="btn btn-control" id="btn-step" title="Step (→)"><span>⏭️</span></button>
+                        <button class="btn btn-control" id="btn-reset" title="Reset (R)"><span>🔄</span></button>
+                    </div>
+                    <div class="controls-center">
+                        <div class="speed-control">
+                            <label>🐢</label>
+                            <input type="range" id="speed-slider" min="50" max="2000" value="500" step="50">
+                            <label>🐇</label>
+                            <span id="speed-label">500ms</span>
+                        </div>
+                    </div>
+                    <div class="controls-right">
+                        <div class="graph-tools">
+                            <button class="btn btn-tool" id="btn-undo" title="Undo (Ctrl+Z)" disabled><span>↩️</span></button>
+                            <button class="btn btn-tool" id="btn-redo" title="Redo (Ctrl+Y)" disabled><span>↪️</span></button>
+                            <span class="tool-divider"></span>
+                            <button class="btn btn-tool" id="btn-add-node" title="Add Node"><span>➕</span> Node</button>
+                            <button class="btn btn-tool" id="btn-add-edge" title="Add Edge"><span>🔗</span> Edge</button>
+                            <button class="btn btn-tool" id="btn-delete" title="Delete"><span>🗑️</span> Delete</button>
+                            <button class="btn btn-tool" id="btn-toggle-physics" title="Toggle Physics"><span>🌀</span> Physics</button>
+                            <button class="btn btn-tool" id="btn-fit-all" title="Fit all nodes in view (F)"><span>🔲</span> Fit</button>
+                            <button class="btn btn-tool" id="btn-focus-selected" title="Focus on selected nodes"><span>🎯</span> Focus</button>
+                            <button class="btn btn-tool" id="btn-set-root" title="Set selected node as root" style="display:none;"><span>🌳</span> Set Root</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step Log -->
+                <div id="step-log">
+                    <div id="step-log-content"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -132,6 +140,6 @@
     <script src="/static/js/algorithm-panel.js?v=6"></script>
     <script src="/static/js/code-editor.js?v=4"></script>
     <script src="/static/js/preset-manager.js?v=4"></script>
-    <script src="/static/js/app.js?v=4"></script>
+    <script src="/static/js/app.js?v=5"></script>
 </body>
 </html>
