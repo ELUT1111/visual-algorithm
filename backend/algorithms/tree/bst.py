@@ -22,6 +22,7 @@ class BSTAlgorithm(AlgorithmProtocol):
             time_complexity="O(n log n) avg, O(n) worst",
             space_complexity="O(n)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Efficient lookup, insert, delete",
                 "In-order traversal gives sorted sequence",

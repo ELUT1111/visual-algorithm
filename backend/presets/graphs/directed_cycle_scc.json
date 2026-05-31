@@ -1,0 +1,22 @@
+{
+  "name": "Directed Cycle SCC",
+  "description": "Directed graph with two strongly connected components and one cross edge",
+  "directed": true,
+  "nodes": [
+    {"id": "A", "label": "A"},
+    {"id": "B", "label": "B"},
+    {"id": "C", "label": "C"},
+    {"id": "D", "label": "D"},
+    {"id": "E", "label": "E"},
+    {"id": "F", "label": "F"}
+  ],
+  "edges": [
+    {"source": "A", "target": "B", "weight": 1, "label": "1", "directed": true},
+    {"source": "B", "target": "C", "weight": 1, "label": "1", "directed": true},
+    {"source": "C", "target": "A", "weight": 1, "label": "1", "directed": true},
+    {"source": "C", "target": "D", "weight": 1, "label": "1", "directed": true},
+    {"source": "D", "target": "E", "weight": 1, "label": "1", "directed": true},
+    {"source": "E", "target": "F", "weight": 1, "label": "1", "directed": true},
+    {"source": "F", "target": "D", "weight": 1, "label": "1", "directed": true}
+  ]
+}

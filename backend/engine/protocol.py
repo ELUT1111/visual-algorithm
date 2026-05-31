@@ -40,6 +40,7 @@ class Step:
     value: str | float | dict | list | None = None
     message: str = ""
     phase: str = "explore"  # "init", "explore", "relax", "finalize", "result"
+    state: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +50,7 @@ class Step:
             "value": self.value,
             "message": self.message,
             "phase": self.phase,
+            "state": self.state,
         }
 
 
@@ -59,8 +61,12 @@ class AlgorithmMeta:
     description: str = ""
     emoji: str = ""
     parameters: list[dict] = field(default_factory=list)
+    requires_graph: bool = True
+    builds_structure: bool = False
     requires_weighted: bool = False
     requires_directed: bool = False
+    requires_dag: bool = False
+    allows_negative_weights: bool = True
     time_complexity: str = ""
     space_complexity: str = ""
     use_cases: list[str] = field(default_factory=list)
@@ -74,8 +80,12 @@ class AlgorithmMeta:
             "description": self.description,
             "emoji": self.emoji,
             "parameters": self.parameters,
+            "requires_graph": self.requires_graph,
+            "builds_structure": self.builds_structure,
             "requires_weighted": self.requires_weighted,
             "requires_directed": self.requires_directed,
+            "requires_dag": self.requires_dag,
+            "allows_negative_weights": self.allows_negative_weights,
             "time_complexity": self.time_complexity,
             "space_complexity": self.space_complexity,
             "use_cases": self.use_cases,

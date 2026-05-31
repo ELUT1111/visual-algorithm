@@ -22,6 +22,7 @@ class AVLAlgorithm(AlgorithmProtocol):
             time_complexity="O(n log n)",
             space_complexity="O(n)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Guaranteed O(log n) operations",
                 "Database indexing with frequent lookups",

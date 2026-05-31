@@ -1,0 +1,20 @@
+{
+  "name": "Disconnected Components",
+  "description": "Undirected graph with three separate components",
+  "directed": false,
+  "nodes": [
+    {"id": "A", "label": "A"},
+    {"id": "B", "label": "B"},
+    {"id": "C", "label": "C"},
+    {"id": "D", "label": "D"},
+    {"id": "E", "label": "E"},
+    {"id": "F", "label": "F"},
+    {"id": "G", "label": "G"}
+  ],
+  "edges": [
+    {"source": "A", "target": "B", "weight": 1, "label": "1"},
+    {"source": "B", "target": "C", "weight": 1, "label": "1"},
+    {"source": "D", "target": "E", "weight": 1, "label": "1"},
+    {"source": "F", "target": "G", "weight": 1, "label": "1"}
+  ]
+}

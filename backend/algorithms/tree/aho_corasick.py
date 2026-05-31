@@ -26,6 +26,7 @@ class AhoCorasickAlgorithm(AlgorithmProtocol):
             time_complexity="O(n + m + z) — n=total pattern chars, m=text length, z=matches",
             space_complexity="O(n * ALPHABET_SIZE)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Multi-pattern string matching",
                 "Intrusion detection systems (IDS)",

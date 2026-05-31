@@ -20,6 +20,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                 {"name": "source", "type": "str", "required": True, "description": "Source node ID"}
             ],
             requires_weighted=True,
+            allows_negative_weights=False,
             time_complexity="O((V + E) log V)",
             space_complexity="O(V)",
             use_cases=[

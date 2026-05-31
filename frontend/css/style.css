@@ -458,6 +458,62 @@ html, body {
     gap: 4px;
 }
 
+/* Algorithm State */
+#state-panel {
+    max-height: 92px;
+    min-height: 54px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    padding: 8px 16px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.state-panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding-top: 3px;
+    flex-shrink: 0;
+}
+
+#state-content {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 6px 10px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+}
+
+.state-row {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.state-key {
+    color: var(--accent-cyan);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.state-value {
+    min-width: 0;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Step Log */
 #step-log {
     flex: 1;

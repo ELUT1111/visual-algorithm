@@ -23,6 +23,7 @@ class HuffmanAlgorithm(AlgorithmProtocol):
             time_complexity="O(n log n)",
             space_complexity="O(n)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Data compression (ZIP, GZIP)",
                 "Huffman encoding/decoding",

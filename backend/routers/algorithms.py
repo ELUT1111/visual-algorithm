@@ -143,9 +143,6 @@ def _generate_params(algo_meta, graph_data: dict, complexity: str | None) -> dic
     count = random.randint(*cfg["count"])
 
     node_ids = [n["id"] for n in graph_data.get("nodes", [])]
-    is_construction = algo_meta.layout == "hierarchical" and algo_meta.category == "tree"
-    is_traversal = algo_meta.layout == "hierarchical" and not is_construction
-
     for p in algo_meta.parameters:
         name = p["name"]
 

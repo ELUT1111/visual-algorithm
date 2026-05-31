@@ -20,7 +20,7 @@ Visual Algorithm Lab is a **highly interactive, visual algorithm learning platfo
 | Feature | Description |
 |---------|-------------|
 | 🎨 **Interactive Graph Editor** | Create nodes and edges by clicking and dragging. Double-click to add nodes, drag between nodes to create edges. |
-| 🛤️ **19 Built-in Algorithms** | 7 graph algorithms + 12 tree algorithms, all with step-by-step visualization. |
+| 🛤️ **23 Built-in Algorithms** | 11 graph algorithms + 12 tree algorithms, all with step-by-step visualization. |
 | ⏯️ **Real-time Controls** | Play, Pause, Step-forward, Reset with adjustable speed slider. |
 | 💻 **Custom Algorithms** | Write your own Python algorithm in the built-in editor and run it instantly. |
 | 📁 **JSON Import/Export** | Save and load graphs as JSON files. Preset graphs and trees included. |
@@ -31,8 +31,8 @@ Visual Algorithm Lab is a **highly interactive, visual algorithm learning platfo
 
 ### 🗂️ Built-in Algorithms
 
-**Graph Algorithms (7)**
-- BFS, DFS, Dijkstra, Bellman-Ford, A\*, Prim, Kruskal
+**Graph Algorithms (11)**
+- BFS, DFS, Dijkstra, Bellman-Ford, A\*, Prim, Kruskal, Topological Sort, Cycle Detection, Connected Components, Tarjan SCC
 
 **Tree Algorithms (12)**
 - BST, AVL, Red-Black Tree, B-Tree, B+ Tree, Heap, Huffman, Trie, Aho-Corasick, Tree BFS, Tree DFS, Level Order
@@ -124,7 +124,11 @@ visual-algorithm/
 │   │   │   ├── bellman_ford.py
 │   │   │   ├── astar.py
 │   │   │   ├── prim.py
-│   │   │   └── kruskal.py
+│   │   │   ├── kruskal.py
+│   │   │   ├── topological_sort.py
+│   │   │   ├── cycle_detection.py
+│   │   │   ├── connected_components.py
+│   │   │   └── tarjan_scc.py
 │   │   └── tree/                    # Tree algorithms
 │   │       ├── bst.py
 │   │       ├── avl.py
@@ -234,7 +238,7 @@ Visual Algorithm Lab 是一个**高度交互式、可视化的算法学习平台
 | 特性 | 说明 |
 |------|------|
 | 🎨 **交互式图编辑器** | 点击画布添加节点，拖拽连线创建边，双击快速添加节点。 |
-| 🛤️ **19 个内置算法** | 7 个图算法 + 12 个树算法，全部支持逐步可视化。 |
+| 🛤️ **23 个内置算法** | 11 个图算法 + 12 个树算法，全部支持逐步可视化。 |
 | ⏯️ **实时控制** | 播放、暂停、单步、重置，配合速度滑块自由调节。 |
 | 💻 **自定义算法** | 在内置代码编辑器中编写 Python 算法，提交后即可运行。 |
 | 📁 **JSON 导入/导出** | 一键保存和加载图数据，预制图和预制树内置。 |
@@ -245,8 +249,8 @@ Visual Algorithm Lab 是一个**高度交互式、可视化的算法学习平台
 
 ### 🗂️ 内置算法
 
-**图算法 (7)**
-- BFS, DFS, Dijkstra, Bellman-Ford, A\*, Prim, Kruskal
+**图算法 (11)**
+- BFS, DFS, Dijkstra, Bellman-Ford, A\*, Prim, Kruskal, Topological Sort, Cycle Detection, Connected Components, Tarjan SCC
 
 **树算法 (12)**
 - BST, AVL, 红黑树, B-Tree, B+ Tree, Heap, Huffman, Trie, Aho-Corasick, Tree BFS, Tree DFS, Level Order
@@ -338,7 +342,11 @@ visual-algorithm/
 │   │   │   ├── bellman_ford.py
 │   │   │   ├── astar.py
 │   │   │   ├── prim.py
-│   │   │   └── kruskal.py
+│   │   │   ├── kruskal.py
+│   │   │   ├── topological_sort.py
+│   │   │   ├── cycle_detection.py
+│   │   │   ├── connected_components.py
+│   │   │   └── tarjan_scc.py
 │   │   └── tree/                   # 树算法
 │   │       ├── bst.py
 │   │       ├── avl.py

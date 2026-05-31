@@ -22,6 +22,7 @@ class AStarAlgorithm(AlgorithmProtocol):
                 {"name": "target", "type": "str", "required": True, "description": "Goal node ID"},
             ],
             requires_weighted=True,
+            allows_negative_weights=False,
             time_complexity="O(E) best, O(b^d) worst",
             space_complexity="O(V)",
             use_cases=[

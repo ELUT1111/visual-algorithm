@@ -22,6 +22,7 @@ class TrieAlgorithm(AlgorithmProtocol):
             time_complexity="O(m) per operation, m = word length",
             space_complexity="O(ALPHABET_SIZE * m * n)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Autocomplete / predictive text",
                 "Spell checking",

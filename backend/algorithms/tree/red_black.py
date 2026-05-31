@@ -25,6 +25,7 @@ class RedBlackAlgorithm(AlgorithmProtocol):
             time_complexity="O(n log n)",
             space_complexity="O(n)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Guaranteed O(log n) operations",
                 "Linux kernel (CFS scheduler, memory management)",

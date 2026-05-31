@@ -13,6 +13,32 @@ from backend.models.graph import Graph
 router = APIRouter()
 
 
+def _is_dag(graph: Graph) -> bool:
+    """Return True when the directed graph has no cycle."""
+    adjacency: dict[str, list[str]] = {n.id: [] for n in graph.nodes}
+    indegree: dict[str, int] = {n.id: 0 for n in graph.nodes}
+    node_ids = set(indegree)
+
+    for edge in graph.edges:
+        if edge.source not in node_ids or edge.target not in node_ids:
+            return False
+        adjacency[edge.source].append(edge.target)
+        indegree[edge.target] += 1
+
+    queue = [node_id for node_id, degree in indegree.items() if degree == 0]
+    visited_count = 0
+
+    while queue:
+        current = queue.pop(0)
+        visited_count += 1
+        for neighbor in adjacency.get(current, []):
+            indegree[neighbor] -= 1
+            if indegree[neighbor] == 0:
+                queue.append(neighbor)
+
+    return visited_count == len(graph.nodes)
+
+
 @router.websocket("/ws/run")
 async def run_algorithm_ws(websocket: WebSocket):
     await websocket.accept()
@@ -64,9 +90,25 @@ async def run_algorithm_ws(websocket: WebSocket):
             if p.get("required") and not params.get(p["name"]):
                 raise ValueError(f"Parameter '{p['name']}' is required")
 
-        # Skip node-ID validation for tree construction algorithms (they build the tree dynamically)
-        is_tree_construction = meta.layout == "hierarchical"
-        if not is_tree_construction:
+        if meta.requires_graph and not meta.builds_structure and not graph.nodes:
+            raise ValueError("Graph has no nodes")
+
+        if meta.requires_directed and not graph.directed:
+            raise ValueError(f"Algorithm '{meta.name}' requires a directed graph")
+
+        if meta.requires_dag:
+            if not graph.directed:
+                raise ValueError(f"Algorithm '{meta.name}' requires a directed acyclic graph")
+            if not _is_dag(graph):
+                raise ValueError(f"Algorithm '{meta.name}' requires a DAG, but this graph contains a cycle")
+
+        if not meta.allows_negative_weights:
+            negative_edges = [e for e in graph.edges if e.weight < 0]
+            if negative_edges:
+                raise ValueError(f"Algorithm '{meta.name}' does not support negative edge weights")
+
+        # Skip node-ID validation for structure-building algorithms.
+        if meta.requires_graph and not meta.builds_structure:
             node_ids = {n.id for n in graph.nodes}
             # Only validate parameters that actually reference node IDs
             node_param_names = {"source", "target", "start", "end", "from", "to"}
@@ -76,9 +118,6 @@ async def run_algorithm_ws(websocket: WebSocket):
                     val = params.get(pname, "")
                     if val and val not in node_ids:
                         raise ValueError(f"Node '{val}' not found in graph")
-
-        if not graph.nodes and not is_tree_construction:
-            raise ValueError("Graph has no nodes")
 
         r = AlgorithmRunner(algo, graph, params)
         r.speed = spd

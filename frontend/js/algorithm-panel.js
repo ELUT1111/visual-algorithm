@@ -300,11 +300,11 @@ class AlgorithmPanel {
 
         const graph = this.editor.toJSON();
 
-        // Skip empty-graph check for tree construction algorithms
+        // Skip empty-graph check only for algorithms that build their own structure.
         const algo_meta = this.algorithms.find(a => `${a.category}/${a.name}` === this.selectedAlgorithm);
-        const isTreeConstruction = algo_meta && algo_meta.layout === 'hierarchical';
+        const buildsStructure = algo_meta && (algo_meta.builds_structure || algo_meta.requires_graph === false);
         if (!graph.nodes || graph.nodes.length === 0) {
-            if (!isTreeConstruction) {
+            if (!buildsStructure) {
                 showToast('Graph has no nodes', 'error');
                 return false;
             }
@@ -369,6 +369,7 @@ class AlgorithmPanel {
         this._updateButtonStates();
 
         document.getElementById('step-log-content').innerHTML = '';
+        this._clearState();
     }
 
     _pause() {
@@ -402,6 +403,7 @@ class AlgorithmPanel {
             this.editor.setMode('run');
             this._setStatus('running', 'Running');
             document.getElementById('step-log-content').innerHTML = '';
+            this._clearState();
 
             // After start, immediately pause so we only get one step
             // We'll pause after the first step arrives
@@ -437,6 +439,7 @@ class AlgorithmPanel {
         this._setStatus('', 'Ready');
         this._updateButtonStates();
         document.getElementById('step-log-content').innerHTML = '';
+        this._clearState();
     }
 
     _setStatus(className, text) {
@@ -456,6 +459,9 @@ class AlgorithmPanel {
             this.visualizer.applyStep(data);
             if (data.message) {
                 this._appendToLog(data.message, data.phase || 'explore');
+            }
+            if (data.state) {
+                this._renderState(data.state);
             }
             // If we started via step button, pause after first step
             if (this._pendingStepPause) {
@@ -502,6 +508,7 @@ class AlgorithmPanel {
             this.editor.setMode('edit');
             this._setStatus('', 'Ready');
             this._updateButtonStates();
+            this._clearState();
         });
 
         this.ws.on('error', (data) => {
@@ -513,6 +520,53 @@ class AlgorithmPanel {
             this._setStatus('', 'Error');
             this._updateButtonStates();
         });
+    }
+
+    _renderState(state) {
+        const panel = document.getElementById('state-panel');
+        const content = document.getElementById('state-content');
+        if (!panel || !content || !state || Object.keys(state).length === 0) return;
+
+        content.innerHTML = '';
+        Object.entries(state).forEach(([key, value]) => {
+            const row = document.createElement('div');
+            row.className = 'state-row';
+
+            const label = document.createElement('div');
+            label.className = 'state-key';
+            label.textContent = key;
+
+            const valueEl = document.createElement('div');
+            valueEl.className = 'state-value';
+            valueEl.textContent = this._formatStateValue(value);
+
+            row.appendChild(label);
+            row.appendChild(valueEl);
+            content.appendChild(row);
+        });
+
+        panel.style.display = 'flex';
+    }
+
+    _formatStateValue(value) {
+        if (Array.isArray(value)) {
+            if (value.length === 0) return '[]';
+            if (value.every(v => typeof v !== 'object')) {
+                return `[${value.join(', ')}]`;
+            }
+            return JSON.stringify(value);
+        }
+        if (value && typeof value === 'object') {
+            return JSON.stringify(value);
+        }
+        return String(value);
+    }
+
+    _clearState() {
+        const panel = document.getElementById('state-panel');
+        const content = document.getElementById('state-content');
+        if (content) content.innerHTML = '';
+        if (panel) panel.style.display = 'none';
     }
 
     _appendToLog(message, phase) {

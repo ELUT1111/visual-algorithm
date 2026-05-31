@@ -24,6 +24,7 @@ class BPlusTreeAlgorithm(AlgorithmProtocol):
             time_complexity="O(n log n)",
             space_complexity="O(n)",
             layout="hierarchical",
+            builds_structure=True,
             use_cases=[
                 "Database systems (MySQL InnoDB)",
                 "File systems",
