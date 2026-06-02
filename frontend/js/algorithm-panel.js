@@ -13,11 +13,19 @@ class AlgorithmPanel {
         this.algorithms = [];
         this.searchQuery = '';
         this.selectedLearningPath = 'all';
+        this.selectedAlgorithmTag = 'all';
         this.categoryCollapsed = new Set();
         this.exampleInputs = this._buildExampleInputs();
         this.learningPaths = this._buildLearningPaths();
+        this.algorithmTags = this._buildAlgorithmTags();
         this.favoriteAlgorithms = new Set(this._loadStoredList('val_favoriteAlgorithms'));
         this.recentAlgorithms = this._loadStoredList('val_recentAlgorithms');
+        this.lastRenderedState = null;
+        this.logFilter = {
+            query: '',
+            phase: 'all'
+        };
+        this.collapsedPanels = new Set();
         this.timeline = {
             baseGraph: null,
             algorithmKey: null,
@@ -28,7 +36,10 @@ class AlgorithmPanel {
             currentIndex: 0,
             completed: false,
             playbackTimer: null,
-            playbackActive: false
+            playbackActive: false,
+            keyOnly: false,
+            bookmarkOnly: false,
+            bookmarks: new Set()
         };
         this.runMetrics = this._createEmptyRunMetrics();
     }
@@ -38,6 +49,8 @@ class AlgorithmPanel {
         this._setupAlgorithmSearch();
         this._setupControls();
         this._setupTimelineControls();
+        this._setupLogFilters();
+        this._setupPanelToggles();
         this._setupWSHandlers();
     }
 
@@ -50,6 +63,7 @@ class AlgorithmPanel {
             this.algorithms = await response.json();
             this._renderAlgorithmOverview();
             this._renderLearningPaths();
+            this._renderAlgorithmTags();
             this._renderQuickAccess();
             this._renderAlgorithmCards();
         } catch (e) {
@@ -246,8 +260,10 @@ class AlgorithmPanel {
         this.searchQuery = '';
         if (searchInput) searchInput.value = '';
         this.selectedLearningPath = 'all';
+        this.selectedAlgorithmTag = 'all';
         this.categoryCollapsed.clear();
         this._renderLearningPaths();
+        this._renderAlgorithmTags();
         this._renderAlgorithmCards();
 
         const card = document.querySelector(`.algo-card[data-key="${key}"]`);
@@ -271,6 +287,103 @@ class AlgorithmPanel {
         }
     }
 
+    _renderAlgorithmTags() {
+        const container = document.getElementById('algorithm-tags');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        const title = document.createElement('div');
+        title.className = 'algorithm-tags-title';
+        title.textContent = 'Tags';
+
+        const list = document.createElement('div');
+        list.className = 'algorithm-tag-list';
+
+        const allTag = {
+            id: 'all',
+            label: 'All',
+            description: 'Show all algorithm tags.'
+        };
+
+        [allTag, ...this.algorithmTags].forEach(tag => {
+            const count = tag.id === 'all'
+                ? this.algorithms.length
+                : this.algorithms.filter(algo => this._getAlgorithmTagIds(algo).includes(tag.id)).length;
+            if (tag.id !== 'all' && count === 0) return;
+
+            const button = document.createElement('button');
+            button.className = tag.id === this.selectedAlgorithmTag ? 'algorithm-tag active' : 'algorithm-tag';
+            button.type = 'button';
+            button.dataset.tag = tag.id;
+            button.title = tag.description;
+
+            const label = document.createElement('span');
+            label.textContent = tag.label;
+
+            const countEl = document.createElement('span');
+            countEl.className = 'algorithm-tag-count';
+            countEl.textContent = count;
+
+            button.appendChild(label);
+            button.appendChild(countEl);
+            button.addEventListener('click', () => {
+                this.selectedAlgorithmTag = tag.id;
+                this.categoryCollapsed.clear();
+                this._renderAlgorithmTags();
+                this._renderAlgorithmCards();
+            });
+            list.appendChild(button);
+        });
+
+        container.appendChild(title);
+        container.appendChild(list);
+    }
+
+    _getActiveAlgorithmTag() {
+        if (this.selectedAlgorithmTag === 'all') return null;
+        return this.algorithmTags.find(tag => tag.id === this.selectedAlgorithmTag) || null;
+    }
+
+    _getAlgorithmTagIds(algo) {
+        const key = `${algo.category}/${algo.name}`;
+        const name = String(algo.name || '').toLowerCase();
+        const category = String(algo.category || '').toLowerCase();
+        const text = [
+            name,
+            category,
+            algo.description,
+            ...(algo.use_cases || [])
+        ].join(' ').toLowerCase();
+        const tags = new Set();
+
+        if (category === 'graph') tags.add('graph');
+        if (category === 'tree') tags.add('tree');
+        if (category === 'array') tags.add('array');
+        if (category === 'dp') tags.add('dp');
+        if (category === 'string') tags.add('string');
+
+        if (/(bfs|dfs|search|traversal|level_order|binary_search)/.test(text)) tags.add('search');
+        if (/(dijkstra|bellman|spfa|floyd|johnson|a\*|shortest|path)/.test(text)) tags.add('shortest-path');
+        if (/(flow|edmonds|dinic|capacity|augment)/.test(text)) tags.add('flow');
+        if (/(sort|quick|merge|heap_sort|bubble|topological)/.test(text)) tags.add('sorting');
+        if (/(mst|minimum spanning|prim|kruskal)/.test(text)) tags.add('mst');
+        if (/(scc|component|cycle|bridge|articulation|union_find|bipartite)/.test(text)) tags.add('graph-structure');
+        if (/(match|pattern|kmp|rabin|boyer|z_algorithm|aho|palindrome|manacher)/.test(text)) tags.add('matching');
+        if (/(knapsack|coin|lcs|edit|subset|word|matrix|fibonacci|lis|dynamic)/.test(text)) tags.add('dp-table');
+        if (/(heap|trie|bst|tree|avl|black|btree|fenwick|huffman)/.test(text)) tags.add('data-structure');
+
+        const overrides = {
+            'graph/topological_sort': ['graph', 'sorting', 'graph-structure'],
+            'array/kadane': ['array', 'dp', 'dp-table'],
+            'tree/aho_corasick': ['tree', 'string', 'matching', 'data-structure'],
+            'tree/fenwick_tree': ['tree', 'array', 'data-structure']
+        };
+        (overrides[key] || []).forEach(tag => tags.add(tag));
+
+        return [...tags];
+    }
+
     _renderAlgorithmCards() {
         const container = document.getElementById('algorithm-list');
         container.innerHTML = '';
@@ -284,6 +397,7 @@ class AlgorithmPanel {
         const query = this.searchQuery.trim().toLowerCase();
         const activePath = this._getActiveLearningPath();
         const activePathKeys = activePath ? new Set(activePath.keys) : null;
+        const activeTag = this._getActiveAlgorithmTag();
         const matchesSearch = (algo) => {
             if (!query) return true;
             const fields = [
@@ -292,13 +406,18 @@ class AlgorithmPanel {
                 algo.description,
                 algo.time_complexity,
                 algo.space_complexity,
-                ...(algo.use_cases || [])
+                ...(algo.use_cases || []),
+                ...this._getAlgorithmTagIds(algo)
             ];
             return fields.some(field => String(field || '').toLowerCase().includes(query));
         };
         const matchesLearningPath = (algo) => {
             if (!activePathKeys) return true;
             return activePathKeys.has(`${algo.category}/${algo.name}`);
+        };
+        const matchesTag = (algo) => {
+            if (!activeTag) return true;
+            return this._getAlgorithmTagIds(algo).includes(activeTag.id);
         };
 
         const categoryOrder = ['graph', 'tree', 'array', 'dp', 'string'];
@@ -317,7 +436,7 @@ class AlgorithmPanel {
 
         orderedCats.forEach(cat => {
             const totalCount = categories[cat].length;
-            const algos = categories[cat].filter(algo => matchesLearningPath(algo) && matchesSearch(algo));
+            const algos = categories[cat].filter(algo => matchesLearningPath(algo) && matchesTag(algo) && matchesSearch(algo));
             if (algos.length === 0) return;
 
             const catInfo = categoryLabels[cat] || { emoji: '📋', label: cat };
@@ -413,7 +532,8 @@ class AlgorithmPanel {
             const empty = document.createElement('div');
             empty.className = 'algorithm-empty';
             const pathText = activePath ? ` in ${activePath.label}` : '';
-            empty.textContent = `No algorithms match "${this.searchQuery.trim()}"${pathText}`;
+            const tagText = activeTag ? ` tagged ${activeTag.label}` : '';
+            empty.textContent = `No algorithms match "${this.searchQuery.trim()}"${pathText}${tagText}`;
             container.appendChild(empty);
         }
     }
@@ -756,7 +876,7 @@ class AlgorithmPanel {
 
         const thead = document.createElement('thead');
         const header = document.createElement('tr');
-        ['Algorithm', 'Status', 'Steps', 'Nodes', 'Edges', 'Result'].forEach(text => {
+        ['Algorithm', 'Status', 'Steps', 'Duration', 'Nodes', 'Edges', 'Phases', 'Actions', 'Result'].forEach(text => {
             const th = document.createElement('th');
             th.textContent = text;
             header.appendChild(th);
@@ -771,8 +891,11 @@ class AlgorithmPanel {
                 result.name || result.algorithm_key,
                 result.status,
                 result.step_count,
+                result.duration_ms !== undefined && result.duration_ms !== null ? `${result.duration_ms}ms` : '',
                 result.visited_node_count,
                 result.touched_edge_count,
+                this._formatCountBreakdown(result.phase_counts || {}, 2),
+                this._formatCountBreakdown(result.action_counts || {}, 2),
                 result.status === 'ok'
                     ? this._formatComparisonSummary(result.summary || {})
                     : (result.error || 'error')
@@ -955,6 +1078,20 @@ class AlgorithmPanel {
                     'array/kadane'
                 ]
             }
+        ];
+    }
+
+    _buildAlgorithmTags() {
+        return [
+            { id: 'search', label: 'Search', description: 'Traversal and lookup algorithms.' },
+            { id: 'shortest-path', label: 'Shortest Path', description: 'Single-source and all-pairs shortest paths.' },
+            { id: 'flow', label: 'Flow', description: 'Maximum-flow and augmenting-path algorithms.' },
+            { id: 'sorting', label: 'Sorting', description: 'Ordering, partitioning, and topological ordering.' },
+            { id: 'mst', label: 'MST', description: 'Minimum spanning tree algorithms.' },
+            { id: 'graph-structure', label: 'Structure', description: 'Connectivity, cycles, SCCs, and low-link analysis.' },
+            { id: 'matching', label: 'Matching', description: 'Pattern matching and palindrome algorithms.' },
+            { id: 'dp-table', label: 'DP Table', description: 'Dynamic programming tables and sequence states.' },
+            { id: 'data-structure', label: 'Data Structure', description: 'Trees, heaps, tries, and indexed structures.' }
         ];
     }
 
@@ -1272,6 +1409,155 @@ class AlgorithmPanel {
 
         const codeEl = document.getElementById('edu-pseudocode');
         codeEl.textContent = algo.pseudocode || '';
+
+        this._renderNextAlgorithms(algo);
+    }
+
+    _renderNextAlgorithms(algo) {
+        const container = document.getElementById('edu-next');
+        if (!container) return;
+
+        container.innerHTML = '';
+        const currentKey = `${algo.category}/${algo.name}`;
+        const recommendations = this._getNextAlgorithms(currentKey).slice(0, 4);
+
+        recommendations.forEach(item => {
+            const nextAlgo = this._findAlgorithmByKey(item.key);
+            if (!nextAlgo) return;
+
+            const button = document.createElement('button');
+            button.className = 'edu-next-item';
+            button.type = 'button';
+            button.dataset.key = item.key;
+
+            const name = document.createElement('span');
+            name.className = 'edu-next-name';
+            name.textContent = `${nextAlgo.emoji || ''} ${nextAlgo.name}`.trim();
+
+            const reason = document.createElement('span');
+            reason.className = 'edu-next-reason';
+            reason.textContent = item.reason;
+
+            button.appendChild(name);
+            button.appendChild(reason);
+            button.addEventListener('click', () => this._selectAlgorithmByKey(item.key));
+            container.appendChild(button);
+        });
+
+        if (!container.children.length) {
+            const fallback = document.createElement('div');
+            fallback.className = 'quick-access-empty';
+            fallback.textContent = 'No related algorithms available.';
+            container.appendChild(fallback);
+        }
+    }
+
+    _getNextAlgorithms(key) {
+        const explicit = {
+            'graph/bfs': [
+                ['graph/dfs', 'Traversal'],
+                ['graph/dijkstra', 'Weighted']
+            ],
+            'graph/dfs': [
+                ['graph/topological_sort', 'DAG'],
+                ['graph/tarjan_scc', 'SCC']
+            ],
+            'graph/dijkstra': [
+                ['graph/bellman_ford', 'Negative edges'],
+                ['graph/astar', 'Heuristic'],
+                ['graph/floyd_warshall', 'All pairs']
+            ],
+            'graph/bellman_ford': [
+                ['graph/spfa', 'Queue variant'],
+                ['graph/johnson', 'All pairs']
+            ],
+            'graph/edmonds_karp': [
+                ['graph/dinic', 'Faster flow']
+            ],
+            'graph/prim': [
+                ['graph/kruskal', 'Edge sorted']
+            ],
+            'graph/kruskal': [
+                ['graph/union_find', 'DSU']
+            ],
+            'string/kmp': [
+                ['string/rabin_karp', 'Hashing'],
+                ['string/boyer_moore', 'Skip rule'],
+                ['string/z_algorithm', 'Prefix table']
+            ],
+            'string/rabin_karp': [
+                ['string/kmp', 'Deterministic'],
+                ['string/boyer_moore', 'Right-to-left']
+            ],
+            'array/bubble_sort': [
+                ['array/merge_sort', 'Stable sort'],
+                ['array/quick_sort', 'Partition']
+            ],
+            'array/quick_sort': [
+                ['array/merge_sort', 'Guaranteed split'],
+                ['array/heap_sort', 'In-place heap']
+            ],
+            'array/binary_search': [
+                ['array/merge_sort', 'Sorted input'],
+                ['tree/bst', 'Tree lookup']
+            ],
+            'array/kadane': [
+                ['dp/lis', 'Sequence DP'],
+                ['dp/subset_sum', 'Subset DP']
+            ],
+            'dp/fibonacci_dp': [
+                ['dp/coin_change', '1D table'],
+                ['dp/lis', 'Sequence DP']
+            ],
+            'dp/lcs': [
+                ['dp/edit_distance', '2D table'],
+                ['string/kmp', 'String matching']
+            ],
+            'dp/knapsack': [
+                ['dp/subset_sum', 'Feasibility'],
+                ['dp/coin_change', 'Unbounded']
+            ],
+            'tree/bst': [
+                ['tree/avl', 'Balanced'],
+                ['tree/red_black', 'Balanced']
+            ],
+            'tree/trie': [
+                ['tree/aho_corasick', 'Multi-pattern'],
+                ['string/kmp', 'Pattern match']
+            ]
+        };
+
+        const result = [];
+        const seen = new Set([key]);
+        (explicit[key] || []).forEach(([candidateKey, reason]) => {
+            if (this._findAlgorithmByKey(candidateKey) && !seen.has(candidateKey)) {
+                seen.add(candidateKey);
+                result.push({ key: candidateKey, reason });
+            }
+        });
+
+        const currentAlgo = this._findAlgorithmByKey(key);
+        if (!currentAlgo) return result;
+
+        const currentTags = new Set(this._getAlgorithmTagIds(currentAlgo));
+        this.algorithms.forEach(candidate => {
+            const candidateKey = `${candidate.category}/${candidate.name}`;
+            if (seen.has(candidateKey)) return;
+            const overlap = this._getAlgorithmTagIds(candidate).filter(tag => currentTags.has(tag));
+            if (!overlap.length) return;
+            seen.add(candidateKey);
+            result.push({
+                key: candidateKey,
+                reason: this._formatTagLabel(overlap[0])
+            });
+        });
+
+        return result;
+    }
+
+    _formatTagLabel(tagId) {
+        const tag = this.algorithmTags.find(item => item.id === tagId);
+        return tag ? tag.label : this._formatStateKey(tagId);
     }
 
     async _generateRandomParams(algo) {
@@ -1394,12 +1680,17 @@ class AlgorithmPanel {
         const endBtn = document.getElementById('btn-timeline-end');
         const slider = document.getElementById('timeline-slider');
         const exportBtn = document.getElementById('btn-export-run');
+        const keyToggle = document.getElementById('timeline-key-steps');
+        const bookmarkPrevBtn = document.getElementById('btn-bookmark-prev');
+        const bookmarkToggleBtn = document.getElementById('btn-bookmark-toggle');
+        const bookmarkNextBtn = document.getElementById('btn-bookmark-next');
+        const bookmarkToggle = document.getElementById('timeline-bookmark-steps');
 
         if (!startBtn || !prevBtn || !playBtn || !nextBtn || !endBtn || !slider) return;
 
         startBtn.addEventListener('click', () => this._renderTimelineIndex(0));
-        prevBtn.addEventListener('click', () => this._renderTimelineIndex(this.timeline.currentIndex - 1));
-        nextBtn.addEventListener('click', () => this._renderTimelineIndex(this.timeline.currentIndex + 1));
+        prevBtn.addEventListener('click', () => this._renderTimelineIndex(this._timelineTargetIndex(-1)));
+        nextBtn.addEventListener('click', () => this._renderTimelineIndex(this._timelineTargetIndex(1)));
         endBtn.addEventListener('click', () => this._renderTimelineIndex(this.timeline.steps.length));
 
         playBtn.addEventListener('click', () => {
@@ -1425,6 +1716,17 @@ class AlgorithmPanel {
             this._renderTimelineIndex(value);
         };
 
+        const previewAtClientX = (clientX) => {
+            if (slider.disabled || !this._timelineCanReview()) return;
+            const rect = slider.getBoundingClientRect();
+            if (!rect.width) return;
+
+            const max = Number(slider.max || 0);
+            const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const index = Math.max(0, Math.min(max, Math.round(ratio * max)));
+            this._showTimelinePreview(index, rect, ratio);
+        };
+
         let activeTimelinePointerId = null;
         slider.addEventListener('pointerdown', (e) => {
             if (e.button !== 0 || slider.disabled) return;
@@ -1432,12 +1734,13 @@ class AlgorithmPanel {
             try {
                 slider.setPointerCapture(e.pointerId);
             } catch (err) {}
+            previewAtClientX(e.clientX);
             scrubToClientX(e.clientX);
             e.preventDefault();
         });
         slider.addEventListener('pointermove', (e) => {
-            if (activeTimelinePointerId !== e.pointerId) return;
-            scrubToClientX(e.clientX);
+            previewAtClientX(e.clientX);
+            if (activeTimelinePointerId === e.pointerId) scrubToClientX(e.clientX);
             e.preventDefault();
         });
         const stopPointerScrub = (e) => {
@@ -1449,17 +1752,125 @@ class AlgorithmPanel {
         };
         slider.addEventListener('pointerup', stopPointerScrub);
         slider.addEventListener('pointercancel', stopPointerScrub);
+        slider.addEventListener('pointerleave', (e) => {
+            if (activeTimelinePointerId !== e.pointerId) this._hideTimelinePreview();
+        });
+        slider.addEventListener('focus', () => this._showTimelinePreview(this.timeline.currentIndex));
+        slider.addEventListener('blur', () => this._hideTimelinePreview());
 
         slider.addEventListener('input', (e) => {
             this._stopTimelinePlayback();
             this._renderTimelineIndex(parseInt(e.target.value, 10));
         });
 
+        if (keyToggle) {
+            keyToggle.addEventListener('change', (e) => {
+                this.timeline.keyOnly = e.target.checked;
+                this._syncTimelineUI();
+            });
+        }
+
+        if (bookmarkPrevBtn) {
+            bookmarkPrevBtn.addEventListener('click', () => this._renderTimelineIndex(this._bookmarkTargetIndex(-1)));
+        }
+        if (bookmarkToggleBtn) {
+            bookmarkToggleBtn.addEventListener('click', () => this._toggleTimelineBookmark());
+        }
+        if (bookmarkNextBtn) {
+            bookmarkNextBtn.addEventListener('click', () => this._renderTimelineIndex(this._bookmarkTargetIndex(1)));
+        }
+        if (bookmarkToggle) {
+            bookmarkToggle.addEventListener('change', (e) => {
+                this.timeline.bookmarkOnly = e.target.checked;
+                this._syncTimelineUI();
+            });
+        }
+
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this._exportRun());
         }
 
         this._syncTimelineUI();
+    }
+
+    _setupLogFilters() {
+        const search = document.getElementById('log-search');
+        const phase = document.getElementById('log-phase-filter');
+        const clear = document.getElementById('btn-clear-log-filter');
+
+        if (search) {
+            search.addEventListener('input', (e) => {
+                this.logFilter.query = e.target.value || '';
+                this._applyLogFilters();
+            });
+        }
+
+        if (phase) {
+            phase.addEventListener('change', (e) => {
+                this.logFilter.phase = e.target.value || 'all';
+                this._applyLogFilters();
+            });
+        }
+
+        if (clear) {
+            clear.addEventListener('click', () => {
+                this._resetLogFilters();
+                this._applyLogFilters();
+            });
+        }
+
+        this._applyLogFilters();
+    }
+
+    _resetLogFilters() {
+        this.logFilter = { query: '', phase: 'all' };
+        const search = document.getElementById('log-search');
+        const phase = document.getElementById('log-phase-filter');
+        if (search) search.value = '';
+        if (phase) phase.value = 'all';
+    }
+
+    _setupPanelToggles() {
+        document.querySelectorAll('[data-panel-toggle]').forEach(button => {
+            const panelId = button.dataset.panelToggle;
+            if (!panelId) return;
+            button.addEventListener('click', () => {
+                this._setPanelCollapsed(panelId, !this.collapsedPanels.has(panelId));
+            });
+            this._syncPanelCollapse(panelId);
+        });
+    }
+
+    _setPanelCollapsed(panelId, collapsed) {
+        if (collapsed) {
+            this.collapsedPanels.add(panelId);
+        } else {
+            this.collapsedPanels.delete(panelId);
+        }
+        this._syncPanelCollapse(panelId);
+    }
+
+    _syncPanelCollapse(panelId) {
+        const panel = document.getElementById(panelId);
+        const button = document.querySelector(`[data-panel-toggle="${panelId}"]`);
+        const collapsed = this.collapsedPanels.has(panelId);
+
+        if (panel) panel.classList.toggle('is-collapsed', collapsed);
+        if (button) {
+            button.textContent = collapsed ? '+' : '-';
+            button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            button.title = `${collapsed ? 'Expand' : 'Collapse'} ${this._panelLabel(panelId)}`;
+        }
+    }
+
+    _panelLabel(panelId) {
+        const labels = {
+            'run-summary': 'Run Summary',
+            'step-detail': 'Step Detail',
+            'state-panel': 'State',
+            'step-log': 'Step Log'
+        };
+        return labels[panelId] || this._formatStateKey(panelId);
     }
 
     loadRunRecord(record) {
@@ -1469,7 +1880,7 @@ class AlgorithmPanel {
             return false;
         }
 
-        const { algorithmKey, params, baseGraph, steps, startedAt, finishedAt, visualization, runMetrics } = normalized;
+        const { algorithmKey, params, baseGraph, steps, startedAt, finishedAt, visualization, runMetrics, bookmarks } = normalized;
         const algo = this.algorithms.find(a => `${a.category}/${a.name}` === algorithmKey) || null;
 
         this._stopTimelinePlayback();
@@ -1511,8 +1922,11 @@ class AlgorithmPanel {
         this.timeline.completed = true;
         this.timeline.playbackTimer = null;
         this.timeline.playbackActive = false;
+        this.timeline.bookmarkOnly = false;
+        this.timeline.bookmarks = new Set(bookmarks || []);
         this.runMetrics = runMetrics || this._computeRunMetrics(this.timeline.steps);
 
+        this.editor.lockLayout();
         this.editor.restoreSnapshot(this.timeline.baseGraph, { save: false });
         this.visualizer.storeOriginalLabels();
         this.editor.setMode('view');
@@ -1526,8 +1940,7 @@ class AlgorithmPanel {
             }
         });
 
-        const log = document.getElementById('step-log-content');
-        if (log) log.innerHTML = '';
+        this._clearStepLog({ resetFilters: true });
         this.timeline.steps.forEach((step, index) => {
             if (step && step.message) {
                 this._appendToLog(step.message, step.phase || 'explore', index);
@@ -1558,6 +1971,7 @@ class AlgorithmPanel {
         const finishedAt = record.finished_at || record.finishedAt || null;
         const visualization = record.visualization || record.visualization_mode || null;
         const runMetrics = record.run_metrics || record.runMetrics || null;
+        const bookmarks = this._normalizeTimelineBookmarks(record.bookmarks || record.timeline_bookmarks || [], steps.length);
 
         if (!algorithmKey || !baseGraph || !Array.isArray(steps) || steps.length === 0) {
             return null;
@@ -1571,8 +1985,17 @@ class AlgorithmPanel {
             startedAt,
             finishedAt,
             visualization,
-            runMetrics
+            runMetrics,
+            bookmarks
         };
+    }
+
+    _normalizeTimelineBookmarks(bookmarks, stepCount = this.timeline.steps.length) {
+        if (!Array.isArray(bookmarks)) return [];
+        return [...new Set(bookmarks
+            .map(value => Number(value))
+            .filter(value => Number.isInteger(value) && value > 0 && value <= stepCount))]
+            .sort((a, b) => a - b);
     }
 
     _findAlgorithmByKey(key) {
@@ -1611,7 +2034,7 @@ class AlgorithmPanel {
         this._setStatus('running', 'Running');
         this._updateButtonStates();
 
-        document.getElementById('step-log-content').innerHTML = '';
+        this._clearStepLog({ resetFilters: true });
         this._clearState();
         this._clearParamErrors();
         this._syncTimelineUI();
@@ -1648,7 +2071,7 @@ class AlgorithmPanel {
             this.isPaused = false;
             this.editor.setMode('run');
             this._setStatus('running', 'Running');
-            document.getElementById('step-log-content').innerHTML = '';
+            this._clearStepLog({ resetFilters: true });
             this._clearState();
             this._clearParamErrors();
             this._syncTimelineUI();
@@ -1672,6 +2095,7 @@ class AlgorithmPanel {
         this.isPaused = false;
         this._pendingStepPause = false;
         this._clearTimeline();
+        this.editor.unlockLayout();
         if (this.visualizer && this.visualizer.setVisualizationMode) {
             this.visualizer.setVisualizationMode(this.selectedVisualization || 'graph');
             if (this.selectedVisualization !== 'graph' && this.visualizer.clearStructure) {
@@ -1701,7 +2125,7 @@ class AlgorithmPanel {
 
         this._setStatus('', 'Ready');
         this._updateButtonStates();
-        document.getElementById('step-log-content').innerHTML = '';
+        this._clearStepLog({ resetFilters: true });
         this._clearState();
         this._clearParamErrors();
     }
@@ -1731,6 +2155,7 @@ class AlgorithmPanel {
             if (data.state) {
                 this._renderState(data.state);
             }
+            this._renderStepDetail(data, this.timeline.steps.length, this.timeline.steps.length);
             this._highlightTimelineLog(this.timeline.steps.length - 1);
             // If we started via step button, pause after first step
             if (this._pendingStepPause) {
@@ -1764,11 +2189,6 @@ class AlgorithmPanel {
             this._syncTimelineUI();
             this._appendToLog('Algorithm completed!', 'result');
             showToast('Algorithm finished!', 'success');
-            // Re-enable layout for tree algorithms, then fit
-            if (this.editor.getStructureType() === 'tree') {
-                this.editor.setLayoutMode('hierarchical');
-            }
-            setTimeout(() => this.editor.fitAll(), 200);
         });
 
         this.ws.on('paused', () => {
@@ -1782,6 +2202,7 @@ class AlgorithmPanel {
             this.isRunning = false;
             this.isPaused = false;
             this._clearTimeline();
+            this.editor.unlockLayout();
             this.editor.setMode('edit');
             this._setStatus('', 'Ready');
             this._updateButtonStates();
@@ -1799,6 +2220,7 @@ class AlgorithmPanel {
             this._pendingStepPause = false;
             this.timeline.completed = false;
             this._stopTimelinePlayback();
+            this.editor.unlockLayout();
             this._setStatus('', 'Error');
             this._updateButtonStates();
             this._updateRunMetrics();
@@ -1808,6 +2230,7 @@ class AlgorithmPanel {
 
     _startTimelineCapture(baseGraph, algorithmKey, params) {
         this._stopTimelinePlayback();
+        this._hideTimelinePreview();
         this.timeline.baseGraph = JSON.parse(JSON.stringify(baseGraph));
         this.timeline.algorithmKey = algorithmKey || this.selectedAlgorithm;
         this.timeline.params = JSON.parse(JSON.stringify(params || {}));
@@ -1816,14 +2239,18 @@ class AlgorithmPanel {
         this.timeline.steps = [];
         this.timeline.currentIndex = 0;
         this.timeline.completed = false;
+        this.timeline.bookmarkOnly = false;
+        this.timeline.bookmarks = new Set();
         this.runMetrics = this._createEmptyRunMetrics();
         this._highlightTimelineLog(-1);
+        this._clearStepDetail();
         this._renderRunSummary();
         this._syncTimelineUI();
     }
 
     _clearTimeline() {
         this._stopTimelinePlayback();
+        this._hideTimelinePreview();
         this.timeline.baseGraph = null;
         this.timeline.algorithmKey = null;
         this.timeline.params = {};
@@ -1832,8 +2259,11 @@ class AlgorithmPanel {
         this.timeline.steps = [];
         this.timeline.currentIndex = 0;
         this.timeline.completed = false;
+        this.timeline.bookmarkOnly = false;
+        this.timeline.bookmarks = new Set();
         this.runMetrics = this._createEmptyRunMetrics();
         this._highlightTimelineLog(-1);
+        this._clearStepDetail();
         this._clearRunSummary();
         this._syncTimelineUI();
     }
@@ -1910,28 +2340,57 @@ class AlgorithmPanel {
             ['Edges', metrics.touched_edge_count],
             ['Messages', metrics.message_count]
         ];
+        if (this.timeline.steps.length > 0) {
+            const current = Math.max(0, Math.min(this.timeline.currentIndex, this.timeline.steps.length));
+            items.push(['Position', `${current} / ${this.timeline.steps.length}`]);
+        }
         if (metrics.duration_ms !== null && metrics.duration_ms !== undefined) {
             items.push(['Duration', `${metrics.duration_ms}ms`]);
         }
 
         items.forEach(([label, value]) => {
-            const item = document.createElement('div');
-            item.className = 'run-metric';
-
-            const labelEl = document.createElement('span');
-            labelEl.className = 'run-metric-label';
-            labelEl.textContent = label;
-
-            const valueEl = document.createElement('span');
-            valueEl.className = 'run-metric-value';
-            valueEl.textContent = this._formatStateValue(value);
-
-            item.appendChild(labelEl);
-            item.appendChild(valueEl);
-            content.appendChild(item);
+            content.appendChild(this._renderRunMetric(label, value));
         });
 
+        const phaseSummary = this._formatCountBreakdown(metrics.phase_counts, 3);
+        if (phaseSummary) content.appendChild(this._renderRunMetric('Phases', phaseSummary, 'detail'));
+
+        const actionSummary = this._formatCountBreakdown(metrics.action_counts, 3);
+        if (actionSummary) content.appendChild(this._renderRunMetric('Actions', actionSummary, 'detail'));
+
         panel.style.display = 'flex';
+    }
+
+    _renderRunMetric(label, value, extraClass = '') {
+        const item = document.createElement('div');
+        item.className = extraClass ? `run-metric ${extraClass}` : 'run-metric';
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'run-metric-label';
+        labelEl.textContent = label;
+
+        const valueEl = document.createElement('span');
+        valueEl.className = 'run-metric-value';
+        valueEl.textContent = this._formatStateValue(value);
+        valueEl.title = valueEl.textContent;
+
+        item.appendChild(labelEl);
+        item.appendChild(valueEl);
+        return item;
+    }
+
+    _formatCountBreakdown(counts, limit = 3) {
+        const entries = Object.entries(counts || {})
+            .filter(([, count]) => Number(count) > 0)
+            .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+
+        if (entries.length === 0) return '';
+
+        const visible = entries.slice(0, limit)
+            .map(([name, count]) => `${this._formatStateKey(name)} ${count}`);
+        const remaining = entries.slice(limit).reduce((sum, [, count]) => sum + Number(count || 0), 0);
+        if (remaining > 0) visible.push(`other ${remaining}`);
+        return visible.join(', ');
     }
 
     _clearRunSummary() {
@@ -1945,11 +2404,153 @@ class AlgorithmPanel {
         return this.timeline.completed && this.timeline.steps.length > 0;
     }
 
+    _timelineStepAt(index) {
+        if (index <= 0) return null;
+        return this.timeline.steps[index - 1] || null;
+    }
+
+    _isKeyTimelineIndex(index) {
+        if (index <= 0 || index >= this.timeline.steps.length) return true;
+
+        const step = this._timelineStepAt(index);
+        if (!step) return false;
+
+        const phase = String(step.phase || '').toLowerCase();
+        if (['init', 'relax', 'finalize', 'result'].includes(phase)) return true;
+
+        const action = String(step.action || '').toLowerCase();
+        return [
+            'render_array',
+            'render_matrix',
+            'update_node_label',
+            'update_edge_label',
+            'update_node_position',
+            'update_array_item',
+            'swap_array_items',
+            'update_matrix_cell',
+            'mark_path',
+            'add_node',
+            'add_edge',
+            'remove_node',
+            'remove_edge'
+        ].includes(action);
+    }
+
+    _timelineTargetIndex(direction) {
+        const total = this.timeline.steps.length;
+        const current = Math.max(0, Math.min(this.timeline.currentIndex, total));
+        const delta = direction < 0 ? -1 : 1;
+
+        if (this.timeline.bookmarkOnly) {
+            return this._bookmarkTargetIndex(direction);
+        }
+
+        if (!this.timeline.keyOnly) {
+            return Math.max(0, Math.min(total, current + delta));
+        }
+
+        for (let index = current + delta; index >= 0 && index <= total; index += delta) {
+            if (this._isKeyTimelineIndex(index)) return index;
+        }
+        return current;
+    }
+
+    _timelineBookmarksArray() {
+        return this._normalizeTimelineBookmarks([...this.timeline.bookmarks], this.timeline.steps.length);
+    }
+
+    _bookmarkTargetIndex(direction) {
+        const bookmarks = this._timelineBookmarksArray();
+        const current = Math.max(0, Math.min(this.timeline.currentIndex, this.timeline.steps.length));
+        if (!bookmarks.length) return current;
+
+        if (direction < 0) {
+            return [...bookmarks].reverse().find(index => index < current) || current;
+        }
+        return bookmarks.find(index => index > current) || current;
+    }
+
+    _toggleTimelineBookmark() {
+        if (!this._timelineCanReview()) return;
+        const current = Math.max(0, Math.min(this.timeline.currentIndex, this.timeline.steps.length));
+        if (current <= 0) return;
+
+        if (this.timeline.bookmarks.has(current)) {
+            this.timeline.bookmarks.delete(current);
+        } else {
+            this.timeline.bookmarks.add(current);
+        }
+        if (this.timeline.bookmarks.size === 0) {
+            this.timeline.bookmarkOnly = false;
+        }
+        this._syncTimelineUI();
+    }
+
+    handleTimelineKeyboard(key) {
+        if (!this._timelineCanReview() || this.isRunning) return false;
+        if (key !== 'ArrowLeft' && key !== 'ArrowRight') return false;
+
+        this._stopTimelinePlayback();
+        const target = this._timelineTargetIndex(key === 'ArrowLeft' ? -1 : 1);
+        this._renderTimelineIndex(target);
+        return true;
+    }
+
+    _showTimelinePreview(index, sliderRect = null, ratio = null) {
+        const preview = document.getElementById('timeline-preview');
+        if (!preview || !this._timelineCanReview()) return;
+
+        const total = this.timeline.steps.length;
+        const bounded = Math.max(0, Math.min(index, total));
+        const step = this._timelineStepAt(bounded);
+        const phase = step ? (step.phase || 'step') : 'start';
+        const action = step ? (step.action || '') : '';
+        const message = step && step.message
+            ? step.message
+            : (step ? this._formatStateKey(action || phase) : 'Initial graph state');
+
+        preview.innerHTML = '';
+
+        const meta = document.createElement('div');
+        meta.className = 'timeline-preview-meta';
+        meta.textContent = `${bounded} / ${total} · ${phase}${action ? ` · ${this._formatStateKey(action)}` : ''}`;
+
+        const text = document.createElement('div');
+        text.className = 'timeline-preview-message';
+        text.textContent = message;
+
+        preview.appendChild(meta);
+        preview.appendChild(text);
+
+        if (sliderRect && ratio !== null) {
+            const bar = document.getElementById('timeline-bar');
+            const barRect = bar ? bar.getBoundingClientRect() : null;
+            if (barRect) {
+                const rawLeft = sliderRect.left - barRect.left + ratio * sliderRect.width;
+                const left = Math.max(92, Math.min(rawLeft, barRect.width - 92));
+                preview.style.left = `${left}px`;
+            }
+        }
+
+        preview.classList.add('visible');
+    }
+
+    _hideTimelinePreview() {
+        const preview = document.getElementById('timeline-preview');
+        if (preview) preview.classList.remove('visible');
+    }
+
     _syncTimelineUI() {
         const slider = document.getElementById('timeline-slider');
         const label = document.getElementById('timeline-label');
         const playIcon = document.getElementById('timeline-play-icon');
         const exportBtn = document.getElementById('btn-export-run');
+        const keyToggle = document.getElementById('timeline-key-steps');
+        const bookmarkPrevBtn = document.getElementById('btn-bookmark-prev');
+        const bookmarkToggleBtn = document.getElementById('btn-bookmark-toggle');
+        const bookmarkToggleIcon = document.getElementById('bookmark-toggle-icon');
+        const bookmarkNextBtn = document.getElementById('btn-bookmark-next');
+        const bookmarkToggle = document.getElementById('timeline-bookmark-steps');
         const ids = [
             'btn-timeline-start',
             'btn-timeline-prev',
@@ -1961,6 +2562,9 @@ class AlgorithmPanel {
         const total = this.timeline.steps.length;
         const current = Math.max(0, Math.min(this.timeline.currentIndex, total));
         const canReview = this._timelineCanReview();
+        const bookmarks = this._timelineBookmarksArray();
+        const hasPreviousBookmark = bookmarks.some(index => index < current);
+        const hasNextBookmark = bookmarks.some(index => index > current);
 
         if (slider) {
             slider.max = String(total);
@@ -1969,6 +2573,15 @@ class AlgorithmPanel {
         }
         if (label) label.textContent = `${current} / ${total}`;
         if (playIcon) playIcon.textContent = this.timeline.playbackActive ? '⏸️' : '▶️';
+
+        if (keyToggle) {
+            keyToggle.checked = !!this.timeline.keyOnly;
+            keyToggle.disabled = !canReview;
+        }
+        if (bookmarkToggle) {
+            bookmarkToggle.checked = !!this.timeline.bookmarkOnly;
+            bookmarkToggle.disabled = !canReview || this.timeline.bookmarks.size === 0;
+        }
 
         ids.forEach(id => {
             const el = document.getElementById(id);
@@ -1984,10 +2597,20 @@ class AlgorithmPanel {
         const endBtn = document.getElementById('btn-timeline-end');
         if (canReview) {
             if (startBtn) startBtn.disabled = current <= 0;
-            if (prevBtn) prevBtn.disabled = current <= 0;
-            if (nextBtn) nextBtn.disabled = current >= total;
+            if (prevBtn) prevBtn.disabled = this.timeline.bookmarkOnly ? !hasPreviousBookmark : current <= 0;
+            if (nextBtn) nextBtn.disabled = this.timeline.bookmarkOnly ? !hasNextBookmark : current >= total;
             if (endBtn) endBtn.disabled = current >= total;
         }
+
+        const isBookmarked = current > 0 && this.timeline.bookmarks.has(current);
+        if (bookmarkPrevBtn) bookmarkPrevBtn.disabled = !canReview || !hasPreviousBookmark;
+        if (bookmarkNextBtn) bookmarkNextBtn.disabled = !canReview || !hasNextBookmark;
+        if (bookmarkToggleBtn) {
+            bookmarkToggleBtn.disabled = !canReview || current <= 0;
+            bookmarkToggleBtn.classList.toggle('active', isBookmarked);
+            bookmarkToggleBtn.title = isBookmarked ? 'Remove bookmark from current step' : 'Bookmark current step';
+        }
+        if (bookmarkToggleIcon) bookmarkToggleIcon.textContent = isBookmarked ? '★' : '☆';
     }
 
     _exportRun() {
@@ -2009,6 +2632,7 @@ class AlgorithmPanel {
             finished_at: this.timeline.finishedAt,
             base_graph: JSON.parse(JSON.stringify(this.timeline.baseGraph || {})),
             step_count: steps.length,
+            bookmarks: this._timelineBookmarksArray(),
             run_metrics: JSON.parse(JSON.stringify(this.runMetrics || this._computeRunMetrics(steps))),
             final_state: finalStep ? (finalStep.state || null) : null,
             steps
@@ -2033,6 +2657,7 @@ class AlgorithmPanel {
         const bounded = Math.max(0, Math.min(index, this.timeline.steps.length));
         this.timeline.currentIndex = bounded;
 
+        this.editor.lockLayout();
         this.editor.restoreSnapshot(this.timeline.baseGraph, { save: false });
         this.visualizer.storeOriginalLabels();
 
@@ -2049,8 +2674,10 @@ class AlgorithmPanel {
 
         this.editor.setMode('view');
         this._setStatus('replay', bounded === this.timeline.steps.length ? 'Replay End' : 'Replaying');
+        this._renderStepDetail(currentStep, bounded, this.timeline.steps.length);
         this._highlightTimelineLog(bounded - 1);
         this._syncTimelineUI();
+        this._renderRunSummary();
     }
 
     _startTimelinePlayback() {
@@ -2068,7 +2695,12 @@ class AlgorithmPanel {
                 this._stopTimelinePlayback();
                 return;
             }
-            this._renderTimelineIndex(this.timeline.currentIndex + 1);
+            const nextIndex = this._timelineTargetIndex(1);
+            if (nextIndex === this.timeline.currentIndex) {
+                this._stopTimelinePlayback();
+                return;
+            }
+            this._renderTimelineIndex(nextIndex);
         }, Math.max(50, this.currentSpeed));
     }
 
@@ -2097,9 +2729,15 @@ class AlgorithmPanel {
         if (!panel || !content || !state || Object.keys(state).length === 0) return;
 
         content.innerHTML = '';
+        const previousState = this.lastRenderedState || {};
+        const changedKeys = [];
         Object.entries(state).forEach(([key, value]) => {
             const section = document.createElement('div');
             section.className = 'state-section';
+            if (this._stateValueChanged(previousState[key], value)) {
+                section.classList.add('changed');
+                changedKeys.push(key);
+            }
 
             const label = document.createElement('div');
             label.className = 'state-section-title';
@@ -2110,12 +2748,36 @@ class AlgorithmPanel {
             content.appendChild(section);
         });
 
+        this._renderStateDiffSummary(changedKeys);
+        this.lastRenderedState = this._cloneState(state);
         panel.style.display = 'flex';
     }
 
+    _renderStateDiffSummary(changedKeys = []) {
+        const summary = document.getElementById('state-diff-summary');
+        if (!summary) return;
+
+        if (!changedKeys.length) {
+            summary.textContent = '';
+            summary.title = '';
+            return;
+        }
+
+        const labels = changedKeys.map(key => this._formatStateKey(key));
+        const visible = labels.slice(0, 3);
+        const extra = labels.length - visible.length;
+        const text = `Changed: ${visible.join(', ')}${extra > 0 ? ` +${extra}` : ''}`;
+        summary.textContent = text;
+        summary.title = `Changed fields: ${labels.join(', ')}`;
+    }
+
     _renderStateValue(key, value, depth = 0) {
+        if (key === 'distances' || key === 'previous' || key === 'predecessors') {
+            return this._renderDictionaryTable(key, value);
+        }
+
         if (value && typeof value === 'object' && value.type === 'matrix') {
-            return this._renderMatrix(value);
+            return this._renderMatrix(value, key);
         }
 
         if (Array.isArray(value)) {
@@ -2127,12 +2789,15 @@ class AlgorithmPanel {
                 return this._renderChips(value);
             }
             if (value.every(item => item && typeof item === 'object' && !Array.isArray(item))) {
-                return this._renderObjectTable(value);
+                return this._renderObjectTable(value, key);
             }
             return this._renderPre(value);
         }
 
         if (value && typeof value === 'object') {
+            if (this._objectHasOnlyPrimitiveValues(value)) {
+                return this._renderDictionaryTable(key, value);
+            }
             return this._renderKeyValueList(value, depth);
         }
 
@@ -2214,13 +2879,13 @@ class AlgorithmPanel {
                 return this._renderChips(value);
             }
             if (value.every(item => item && typeof item === 'object' && !Array.isArray(item))) {
-                return depth > 1 ? this._renderInlineObjectValue(value) : this._renderObjectTable(value);
+                return depth > 1 ? this._renderInlineObjectValue(value) : this._renderObjectTable(value, key);
             }
             return this._renderPre(value);
         }
 
         if (value && typeof value === 'object') {
-            if (value.type === 'matrix') return this._renderMatrix(value);
+            if (value.type === 'matrix') return this._renderMatrix(value, key);
             if (depth >= 3 || this._objectHasOnlyPrimitiveValues(value)) {
                 return this._renderInlineObjectValue(value);
             }
@@ -2241,10 +2906,47 @@ class AlgorithmPanel {
         return span;
     }
 
-    _renderObjectTable(items) {
+    _renderDictionaryTable(key, obj) {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return this._renderEmptyState();
+
+        const rows = Object.entries(obj).map(([name, value]) => ({
+            name,
+            value
+        }));
+        const table = document.createElement('table');
+        table.className = `state-table state-dictionary-table state-${this._stateClassName(key)}-table`;
+
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        [this._dictionaryKeyLabel(key), this._dictionaryValueLabel(key)].forEach(text => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        rows.forEach(row => {
+            const tr = document.createElement('tr');
+            const keyCell = document.createElement('th');
+            keyCell.textContent = row.name;
+            const valueCell = document.createElement('td');
+            valueCell.textContent = this._formatStateValue(row.value);
+            valueCell.className = this._stateValueClass(row.value);
+            tr.appendChild(keyCell);
+            tr.appendChild(valueCell);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        return table;
+    }
+
+    _renderObjectTable(items, key = '') {
         const columns = [...new Set(items.flatMap(item => Object.keys(item)))];
         const table = document.createElement('table');
-        table.className = 'state-table';
+        table.className = `state-table ${this._stateObjectTableClass(key)}`;
 
         const thead = document.createElement('thead');
         const headRow = document.createElement('tr');
@@ -2264,6 +2966,7 @@ class AlgorithmPanel {
                 const cellValue = item[col];
                 if (this._isPrimitive(cellValue)) {
                     td.textContent = this._formatStateValue(cellValue);
+                    td.className = this._stateValueClass(cellValue);
                 } else {
                     td.appendChild(this._renderInlineObjectValue(cellValue));
                 }
@@ -2276,12 +2979,12 @@ class AlgorithmPanel {
         return table;
     }
 
-    _renderMatrix(matrix) {
+    _renderMatrix(matrix, key = '') {
         const rows = matrix.rows || [];
         const columns = matrix.columns || [];
         const values = matrix.values || [];
         const table = document.createElement('table');
-        table.className = 'state-table state-matrix';
+        table.className = `state-table state-matrix state-${this._stateClassName(key)}-matrix`;
 
         const thead = document.createElement('thead');
         const headRow = document.createElement('tr');
@@ -2304,6 +3007,7 @@ class AlgorithmPanel {
             rowValues.forEach(value => {
                 const td = document.createElement('td');
                 td.textContent = this._formatStateValue(value);
+                td.className = this._stateValueClass(value);
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
@@ -2342,6 +3046,53 @@ class AlgorithmPanel {
 
     _objectHasOnlyPrimitiveValues(obj) {
         return Object.values(obj).every(value => this._isPrimitive(value));
+    }
+
+    _stateValueChanged(previous, current) {
+        if (previous === undefined) return false;
+        return JSON.stringify(previous) !== JSON.stringify(current);
+    }
+
+    _cloneState(state) {
+        try {
+            return JSON.parse(JSON.stringify(state));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    _stateClassName(key) {
+        return String(key || 'value').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+    }
+
+    _stateObjectTableClass(key) {
+        const normalized = String(key || '').toLowerCase();
+        if (normalized.includes('residual') || normalized.includes('flow')) return 'state-flow-table';
+        if (normalized.includes('dp')) return 'state-dp-table';
+        if (normalized.includes('path') || normalized.includes('augment')) return 'state-path-table';
+        return '';
+    }
+
+    _dictionaryKeyLabel(key) {
+        const normalized = String(key || '').toLowerCase();
+        if (normalized.includes('distance')) return 'Node';
+        if (normalized.includes('previous') || normalized.includes('predecessor')) return 'Node';
+        return 'Key';
+    }
+
+    _dictionaryValueLabel(key) {
+        const normalized = String(key || '').toLowerCase();
+        if (normalized.includes('distance')) return 'Distance';
+        if (normalized.includes('previous') || normalized.includes('predecessor')) return 'Previous';
+        return 'Value';
+    }
+
+    _stateValueClass(value) {
+        if (value === true || value === 'T' || value === 'true') return 'state-cell-true';
+        if (value === false || value === 'F' || value === 'false') return 'state-cell-false';
+        if (value === Infinity || value === 'Infinity' || value === '∞') return 'state-cell-infinity';
+        if (value === null || value === undefined || value === '') return 'state-cell-empty';
+        return '';
     }
 
     _formatStateKey(key) {
@@ -2383,14 +3134,97 @@ class AlgorithmPanel {
         const content = document.getElementById('state-content');
         if (content) content.innerHTML = '';
         if (panel) panel.style.display = 'none';
+        this._renderStateDiffSummary([]);
+        this.lastRenderedState = null;
+    }
+
+    _renderStepDetail(step, index = this.timeline.currentIndex, total = this.timeline.steps.length) {
+        const panel = document.getElementById('step-detail');
+        const content = document.getElementById('step-detail-content');
+        if (!panel || !content) return;
+
+        if (!step) {
+            this._clearStepDetail();
+            return;
+        }
+
+        content.innerHTML = '';
+        const items = [
+            ['Step', `${index} / ${total}`],
+            ['Phase', step.phase || 'step'],
+            ['Action', this._formatStateKey(step.action || 'unknown')]
+        ];
+
+        if (step.target_type || step.target_id) {
+            const targetType = step.target_type || 'target';
+            const targetId = step.target_id || '';
+            items.push(['Target', targetId ? `${targetType}:${targetId}` : targetType]);
+        }
+
+        items.forEach(([label, value]) => {
+            content.appendChild(this._renderStepDetailItem(label, value));
+        });
+
+        if (step.message) {
+            const message = document.createElement('div');
+            message.className = 'step-detail-message';
+            message.textContent = step.message;
+            message.title = step.message;
+            content.appendChild(message);
+        }
+
+        panel.style.display = 'flex';
+    }
+
+    _renderStepDetailItem(label, value) {
+        const item = document.createElement('div');
+        item.className = 'step-detail-item';
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'step-detail-label';
+        labelEl.textContent = label;
+
+        const valueEl = document.createElement('span');
+        valueEl.className = 'step-detail-value';
+        valueEl.textContent = this._formatStateValue(value);
+        valueEl.title = valueEl.textContent;
+
+        item.appendChild(labelEl);
+        item.appendChild(valueEl);
+        return item;
+    }
+
+    _clearStepDetail() {
+        const panel = document.getElementById('step-detail');
+        const content = document.getElementById('step-detail-content');
+        if (content) content.innerHTML = '';
+        if (panel) panel.style.display = 'none';
     }
 
     _appendToLog(message, phase, stepIndex = null) {
         const log = document.getElementById('step-log-content');
+        if (!log) return;
         const entry = document.createElement('div');
         entry.className = 'log-entry';
+        entry.dataset.phase = phase || 'info';
+        entry.dataset.message = String(message || '').toLowerCase();
         if (stepIndex !== null && stepIndex !== undefined) {
             entry.dataset.stepIndex = String(stepIndex);
+            entry.classList.add('clickable');
+            entry.title = 'Jump to this timeline step';
+            entry.setAttribute('role', 'button');
+            entry.tabIndex = 0;
+            const jumpToStep = () => {
+                if (!this._timelineCanReview()) return;
+                this._stopTimelinePlayback();
+                this._renderTimelineIndex(Number(stepIndex) + 1);
+            };
+            entry.addEventListener('click', jumpToStep);
+            entry.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                jumpToStep();
+            });
         }
 
         const phaseSpan = document.createElement('span');
@@ -2404,6 +3238,45 @@ class AlgorithmPanel {
         entry.appendChild(phaseSpan);
         entry.appendChild(msgSpan);
         log.appendChild(entry);
+        this._applyLogFilters();
         log.scrollTop = log.scrollHeight;
+    }
+
+    _clearStepLog({ resetFilters = false } = {}) {
+        const log = document.getElementById('step-log-content');
+        if (log) log.innerHTML = '';
+        if (resetFilters) this._resetLogFilters();
+        this._applyLogFilters();
+    }
+
+    _applyLogFilters() {
+        const log = document.getElementById('step-log-content');
+        const count = document.getElementById('log-match-count');
+        if (!log) {
+            if (count) count.textContent = '0 steps';
+            return;
+        }
+
+        const query = String(this.logFilter.query || '').trim().toLowerCase();
+        const phase = this.logFilter.phase || 'all';
+        const entries = [...log.querySelectorAll('.log-entry')];
+        let visible = 0;
+
+        entries.forEach(entry => {
+            const entryPhase = entry.dataset.phase || '';
+            const message = entry.dataset.message || entry.textContent.toLowerCase();
+            const matchesPhase = phase === 'all' || entryPhase === phase;
+            const matchesQuery = !query || message.includes(query) || entryPhase.includes(query);
+            const matches = matchesPhase && matchesQuery;
+            entry.hidden = !matches;
+            if (matches) visible += 1;
+        });
+
+        if (count) {
+            const total = entries.length;
+            count.textContent = query || phase !== 'all'
+                ? `${visible} / ${total} steps`
+                : `${total} steps`;
+        }
     }
 }

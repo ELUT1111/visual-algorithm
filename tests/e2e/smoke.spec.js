@@ -24,6 +24,25 @@ test('shows algorithm overview and filters by learning path', async ({ page }) =
   await expect(page.locator('.algo-card[data-key="graph/dijkstra"]')).toBeVisible();
 });
 
+test('filters algorithms by tag and recommends related algorithms', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('#algorithm-tags')).toContainText('Shortest Path');
+  await page.locator('.algorithm-tag[data-tag="shortest-path"]').click();
+
+  await expect(page.locator('.algorithm-tag.active')).toContainText('Shortest Path');
+  await expect(page.locator('.algo-card[data-key="graph/dijkstra"]')).toBeVisible();
+  await expect(page.locator('.algo-card[data-key="array/bubble_sort"]')).toHaveCount(0);
+
+  await page.locator('.algo-card[data-key="graph/dijkstra"]').click();
+  await expect(page.locator('#edu-next')).toContainText('bellman_ford');
+  await expect(page.locator('.edu-next-item[data-key="graph/bellman_ford"]')).toBeVisible();
+
+  await page.locator('.edu-next-item[data-key="graph/bellman_ford"]').click();
+  await expect(page.locator('.algo-card[data-key="graph/bellman_ford"]')).toHaveClass(/selected/);
+  await expect(page.locator('#status-badge')).toContainText('bellman_ford');
+});
+
 test('pins favorite algorithms and keeps recent selections', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
@@ -83,14 +102,59 @@ test('loads, searches, runs an array algorithm, replays timeline, exports and im
   await expect(page.locator('#run-summary')).toBeVisible();
   await expect(page.locator('#run-summary')).toContainText('Steps');
   await expect(page.locator('#run-summary')).toContainText('Messages');
+  await expect(page.locator('#run-summary')).toContainText('Position');
+  await expect(page.locator('#run-summary')).toContainText('Phases');
+  await expect(page.locator('#run-summary')).toContainText('Actions');
+  await expect(page.locator('#step-detail')).toBeVisible();
+  await expect(page.locator('#step-detail')).toContainText('Step');
+  await expect(page.locator('#step-detail')).toContainText('Phase');
+  await expect(page.locator('#step-detail')).toContainText('Action');
+  await page.locator('[data-panel-toggle="run-summary"]').click();
+  await expect(page.locator('#run-summary')).toHaveClass(/is-collapsed/);
+  await expect(page.locator('#run-summary-content')).toBeHidden();
+  await page.locator('[data-panel-toggle="run-summary"]').click();
+  await expect(page.locator('#run-summary')).not.toHaveClass(/is-collapsed/);
+  await page.locator('[data-panel-toggle="step-detail"]').click();
+  await expect(page.locator('#step-detail-content')).toBeHidden();
+  await page.locator('[data-panel-toggle="step-detail"]').click();
+  await page.locator('[data-panel-toggle="step-log"]').click();
+  await expect(page.locator('#step-log')).toHaveClass(/is-collapsed/);
+  await expect(page.locator('#step-log-content')).toBeHidden();
+  await page.locator('[data-panel-toggle="step-log"]').click();
+  await expect(page.locator('#step-log')).not.toHaveClass(/is-collapsed/);
   await expect(page.locator('#timeline-slider')).toBeEnabled();
   await expect(page.locator('#btn-export-run')).toBeEnabled();
   await expect(page.locator('#timeline-label')).toHaveText(/^\d+ \/ \d+$/);
+  await expect(page.locator('#log-match-count')).toContainText(/\d+ steps/);
+  await page.locator('#log-search').fill('8');
+  await expect(page.locator('#log-match-count')).toContainText(/\/ \d+ steps/);
+  await expect(page.locator('#step-log-content .log-entry').filter({ hasText: '8' }).first()).toBeVisible();
+  await page.locator('#btn-clear-log-filter').click();
+  await page.locator('#log-phase-filter').selectOption('result');
+  await expect(page.locator('#step-log-content .log-entry:visible').first()).toContainText('result');
+  await page.locator('#btn-clear-log-filter').click();
+  await expect(page.locator('#log-search')).toHaveValue('');
+  await expect(page.locator('#log-phase-filter')).toHaveValue('all');
 
   await page.locator('#btn-timeline-start').click();
   await expect(page.locator('#timeline-label')).toHaveText(/^0 \/ \d+$/);
   await page.locator('#btn-timeline-next').click();
   await expect(page.locator('#timeline-label')).toHaveText(/^1 \/ \d+$/);
+  await expect(page.locator('#step-detail')).toContainText(/1 \/ \d+/);
+  const targetLog = page.locator('#step-log-content .log-entry[data-step-index="2"]').first();
+  await targetLog.click();
+  await expect(page.locator('#timeline-label')).toHaveText(/^3 \/ \d+$/);
+  await expect(page.locator('#step-detail')).toContainText(/3 \/ \d+/);
+  await expect(targetLog).toHaveClass(/active/);
+  await page.locator('#btn-bookmark-toggle').click();
+  await expect(page.locator('#btn-bookmark-toggle')).toHaveClass(/active/);
+  await page.locator('#btn-timeline-start').click();
+  await page.locator('#btn-bookmark-next').click();
+  await expect(page.locator('#timeline-label')).toHaveText(/^3 \/ \d+$/);
+  await page.locator('#btn-timeline-start').click();
+  await page.locator('#timeline-bookmark-steps').check();
+  await page.locator('#btn-timeline-next').click();
+  await expect(page.locator('#timeline-label')).toHaveText(/^3 \/ \d+$/);
 
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#btn-export-run').click();
@@ -100,6 +164,7 @@ test('loads, searches, runs an array algorithm, replays timeline, exports and im
   const exported = JSON.parse(fs.readFileSync(exportedPath, 'utf8'));
   expect(exported.run_metrics.step_count).toBeGreaterThan(0);
   expect(exported.run_metrics.message_count).toBeGreaterThan(0);
+  expect(exported.bookmarks).toEqual([3]);
 
   await page.locator('#btn-reset').click();
   await expect(page.locator('#status-badge')).toHaveText('Ready');
@@ -117,6 +182,15 @@ test('loads, searches, runs an array algorithm, replays timeline, exports and im
   await expect(page.locator('#timeline-label')).toHaveText(new RegExp(`^${exported.step_count} / ${exported.step_count}$`));
   await expect(page.locator('#run-summary')).toBeVisible();
   await expect(page.locator('#run-summary')).toContainText('Steps');
+  await expect(page.locator('#run-summary')).toContainText('Position');
+  await expect(page.locator('#run-summary')).toContainText(`${exported.step_count} / ${exported.step_count}`);
+  await expect(page.locator('#run-summary')).toContainText('Phases');
+  await expect(page.locator('#run-summary')).toContainText('Actions');
+  await expect(page.locator('#step-detail')).toBeVisible();
+  await expect(page.locator('#step-detail')).toContainText(`${exported.step_count} / ${exported.step_count}`);
+  await page.locator('#btn-timeline-start').click();
+  await page.locator('#btn-bookmark-next').click();
+  await expect(page.locator('#timeline-label')).toHaveText(/^3 \/ \d+$/);
 });
 
 test('loads a graph-backed example and prepares its parameters', async ({ page }) => {
@@ -140,10 +214,20 @@ test('keeps graph layout stable when scrubbing the timeline slider', async ({ pa
   await page.locator('.example-select').selectOption({ label: 'City distances' });
   await page.getByRole('button', { name: 'Load' }).click();
 
+  const expectedViewport = await page.evaluate(() => {
+    window.app.graphEditor.network.moveTo({
+      position: { x: 40, y: -30 },
+      scale: 0.78,
+      animation: false
+    });
+    return window.app.graphEditor.getViewport();
+  });
+
   await page.locator('#speed-slider').fill('50');
   await page.locator('#btn-play').click();
   await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
   await expect(page.locator('#timeline-slider')).toBeEnabled();
+  await expect(page.locator('#timeline-key-steps')).toBeEnabled();
 
   const before = await page.evaluate(() => {
     const positions = Object.values(window.app.graphEditor.network.getPositions());
@@ -158,16 +242,32 @@ test('keeps graph layout stable when scrubbing the timeline slider', async ({ pa
   const total = await page.locator('#timeline-slider').evaluate(slider => Number(slider.max));
   const sliderBox = await page.locator('#timeline-slider').boundingBox();
   expect(sliderBox).not.toBeNull();
+  await page.mouse.move(sliderBox.x + sliderBox.width * 0.35, sliderBox.y + sliderBox.height / 2);
+  await expect(page.locator('#timeline-preview')).toHaveClass(/visible/);
+  await expect(page.locator('#timeline-preview')).toContainText(/\d+ \/ \d+/);
   await page.mouse.click(sliderBox.x + sliderBox.width * 0.2, sliderBox.y + sliderBox.height / 2);
   await expect.poll(async () => page.locator('#timeline-label').textContent()).not.toBe(`${total} / ${total}`);
+  const scrubbedLabel = await page.locator('#timeline-label').textContent();
+
+  await page.locator('#timeline-key-steps').check();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => page.locator('#timeline-label').textContent()).not.toBe(scrubbedLabel);
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#status-badge')).toHaveText(/Replaying|Replay End/);
+  await expect.poll(async () => page.evaluate(() => window.app.graphEditor.getViewport())).toMatchObject({
+    scale: expect.closeTo(expectedViewport.scale, 2)
+  });
 
   const after = await page.evaluate(() => {
     const positions = Object.values(window.app.graphEditor.network.getPositions());
     const xs = positions.map(pos => pos.x);
     const ys = positions.map(pos => pos.y);
+    const viewport = window.app.graphEditor.getViewport();
     return {
       width: Math.max(...xs) - Math.min(...xs),
-      height: Math.max(...ys) - Math.min(...ys)
+      height: Math.max(...ys) - Math.min(...ys),
+      viewport,
+      layoutLocked: window.app.graphEditor.isLayoutLocked()
     };
   });
 
@@ -175,6 +275,10 @@ test('keeps graph layout stable when scrubbing the timeline slider', async ({ pa
   expect(before.height).toBeGreaterThan(100);
   expect(after.width).toBeGreaterThan(100);
   expect(after.height).toBeGreaterThan(100);
+  expect(after.viewport.x).toBeCloseTo(expectedViewport.x, 0);
+  expect(after.viewport.y).toBeCloseTo(expectedViewport.y, 0);
+  expect(after.viewport.scale).toBeCloseTo(expectedViewport.scale, 2);
+  expect(after.layoutLocked).toBe(true);
 });
 
 test('runs a string matching algorithm and renders structured state', async ({ page }) => {
@@ -244,10 +348,17 @@ test('runs a max-flow example and shows residual-network state', async ({ page }
   await expect(page.locator('#state-content')).toContainText('max flow');
   await expect(page.locator('#state-content')).toContainText('residual network');
   await expect(page.locator('#state-content')).toContainText('augmentations');
+  await expect(page.locator('.state-flow-table').first()).toBeVisible();
 
   await page.locator('#btn-timeline-start').click();
   await page.locator('#btn-timeline-next').click();
   await expect(page.locator('#state-content')).toContainText('flow table');
+
+  for (let i = 0; i < 8 && await page.locator('.state-section.changed').count() === 0; i++) {
+    await page.locator('#btn-timeline-next').click();
+  }
+  await expect(page.locator('.state-section.changed').first()).toBeVisible();
+  await expect(page.locator('#state-diff-summary')).toContainText('Changed:');
 });
 
 test('compares max-flow algorithms on the same capacity network', async ({ page }) => {
@@ -263,6 +374,9 @@ test('compares max-flow algorithms on the same capacity network', async ({ page 
 
   await expect(page.locator('.compare-results')).toContainText('edmonds_karp');
   await expect(page.locator('.compare-results')).toContainText('dinic');
+  await expect(page.locator('.compare-results')).toContainText('Duration');
+  await expect(page.locator('.compare-results')).toContainText('Phases');
+  await expect(page.locator('.compare-results')).toContainText('Actions');
   await expect(page.locator('.compare-results')).toContainText('max flow: 19');
 });
 
@@ -324,6 +438,8 @@ test('runs word break and shows segmentation state', async ({ page }) => {
   await expect(page.locator('#state-content')).toContainText('can segment');
   await expect(page.locator('#state-content')).toContainText('segmentation');
   await expect(page.locator('#state-content')).toContainText('dp table');
+  await expect(page.locator('.state-dp-table')).toHaveCount(1);
+  await expect(page.locator('.state-cell-true').first()).toBeVisible();
 });
 
 test('runs fenwick tree and shows prefix query state', async ({ page }) => {

@@ -245,6 +245,11 @@ class App {
                 }
             }
 
+            if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && this.algorithmPanel.handleTimelineKeyboard(e.key)) {
+                e.preventDefault();
+                return;
+            }
+
             // Don't trigger other shortcuts when typing in inputs
             if (isInput) return;
 

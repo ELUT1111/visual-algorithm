@@ -6,7 +6,7 @@
     <title>Visual Algorithm Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=11">
+    <link rel="stylesheet" href="/static/css/style.css?v=21">
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
@@ -26,6 +26,7 @@
                 <h3><span class="emoji-icon">📋</span> Algorithms</h3>
                 <div id="algorithm-overview" class="algorithm-overview" aria-label="Algorithm library overview"></div>
                 <div id="learning-paths" class="learning-paths" aria-label="Learning paths"></div>
+                <div id="algorithm-tags" class="algorithm-tags" aria-label="Algorithm tag filters"></div>
                 <div id="algorithm-quick-access" class="algorithm-quick-access" aria-label="Favorite and recent algorithms"></div>
                 <div class="algorithm-toolbar">
                     <input id="algorithm-search" type="search" placeholder="Search algorithms" autocomplete="off">
@@ -59,6 +60,10 @@
                     <div class="edu-block">
                         <div class="edu-label">Pseudocode</div>
                         <pre id="edu-pseudocode" class="edu-code"></pre>
+                    </div>
+                    <div class="edu-block">
+                        <div class="edu-label">Next</div>
+                        <div id="edu-next" class="edu-next-list"></div>
                     </div>
                 </div>
             </section>
@@ -170,25 +175,71 @@
                     <button class="btn btn-timeline" id="btn-timeline-play" title="Replay timeline" disabled><span id="timeline-play-icon">▶️</span></button>
                     <button class="btn btn-timeline" id="btn-timeline-next" title="Next step" disabled><span>▶️</span></button>
                     <button class="btn btn-timeline" id="btn-timeline-end" title="Jump to end" disabled><span>⏭️</span></button>
+                    <button class="btn btn-timeline" id="btn-bookmark-prev" title="Previous bookmark" disabled><span>◀◆</span></button>
+                    <button class="btn btn-timeline" id="btn-bookmark-toggle" title="Bookmark current step" disabled><span id="bookmark-toggle-icon">☆</span></button>
+                    <button class="btn btn-timeline" id="btn-bookmark-next" title="Next bookmark" disabled><span>◆▶</span></button>
+                    <label class="timeline-filter" title="Jump through key algorithm steps">
+                        <input type="checkbox" id="timeline-key-steps">
+                        <span>Key</span>
+                    </label>
+                    <label class="timeline-filter" title="Jump only through bookmarked steps">
+                        <input type="checkbox" id="timeline-bookmark-steps">
+                        <span>Marks</span>
+                    </label>
                     <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1" disabled>
+                    <div id="timeline-preview" role="status" aria-live="polite"></div>
                     <span id="timeline-label">0 / 0</span>
                     <button class="btn btn-timeline-export" id="btn-export-run" title="Export completed run" disabled><span>💾</span> Export</button>
                 </div>
 
                 <!-- Run Metrics -->
                 <div id="run-summary" style="display:none;">
-                    <div class="run-summary-title">Run Summary</div>
+                    <div class="run-summary-title panel-title">
+                        <span>Run Summary</span>
+                        <button class="panel-collapse" type="button" data-panel-toggle="run-summary" aria-controls="run-summary-content" aria-expanded="true" title="Collapse Run Summary">−</button>
+                    </div>
                     <div id="run-summary-content"></div>
+                </div>
+
+                <!-- Current Step Detail -->
+                <div id="step-detail" style="display:none;">
+                    <div class="step-detail-title panel-title">
+                        <span>Step Detail</span>
+                        <button class="panel-collapse" type="button" data-panel-toggle="step-detail" aria-controls="step-detail-content" aria-expanded="true" title="Collapse Step Detail">−</button>
+                    </div>
+                    <div id="step-detail-content"></div>
                 </div>
 
                 <!-- Algorithm State -->
                 <div id="state-panel" style="display:none;">
-                    <div class="state-panel-title">State</div>
+                    <div class="state-panel-title panel-title">
+                        <span>State</span>
+                        <span id="state-diff-summary" class="state-diff-summary"></span>
+                        <button class="panel-collapse" type="button" data-panel-toggle="state-panel" aria-controls="state-content" aria-expanded="true" title="Collapse State">−</button>
+                    </div>
                     <div id="state-content"></div>
                 </div>
 
                 <!-- Step Log -->
                 <div id="step-log">
+                    <div id="step-log-tools">
+                        <div class="step-log-title panel-title">
+                            <span>Step Log</span>
+                            <button class="panel-collapse" type="button" data-panel-toggle="step-log" aria-controls="step-log-content" aria-expanded="true" title="Collapse Step Log">−</button>
+                        </div>
+                        <input id="log-search" type="search" placeholder="Search steps" autocomplete="off">
+                        <select id="log-phase-filter" aria-label="Filter log by phase">
+                            <option value="all">All phases</option>
+                            <option value="init">Init</option>
+                            <option value="explore">Explore</option>
+                            <option value="relax">Relax</option>
+                            <option value="finalize">Finalize</option>
+                            <option value="result">Result</option>
+                            <option value="info">Info</option>
+                        </select>
+                        <span id="log-match-count">0 steps</span>
+                        <button class="btn btn-sm" id="btn-clear-log-filter" type="button">Clear</button>
+                    </div>
                     <div id="step-log-content"></div>
                 </div>
             </div>
@@ -203,11 +254,11 @@
 
     <script src="/static/js/utils.js?v=3"></script>
     <script src="/static/js/ws-client.js?v=3"></script>
-    <script src="/static/js/graph-editor.js?v=10"></script>
+    <script src="/static/js/graph-editor.js?v=11"></script>
     <script src="/static/js/visualizer.js?v=10"></script>
-    <script src="/static/js/algorithm-panel.js?v=20"></script>
+    <script src="/static/js/algorithm-panel.js?v=31"></script>
     <script src="/static/js/code-editor.js?v=4"></script>
     <script src="/static/js/preset-manager.js?v=8"></script>
-    <script src="/static/js/app.js?v=8"></script>
+    <script src="/static/js/app.js?v=9"></script>
 </body>
 </html>

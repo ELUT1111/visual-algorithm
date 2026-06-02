@@ -13,6 +13,7 @@ class GraphEditor {
         this._undoStack = [];
         this._redoStack = [];
         this._maxHistory = 50;
+        this._layoutLocked = false;
         this._init();
     }
 
@@ -440,12 +441,45 @@ class GraphEditor {
             name: 'Custom Graph',
             directed: this._directed,
             nodes,
-            edges
+            edges,
+            viewport: this.getViewport()
         };
         if (this._rootId) {
             result.root_id = this._rootId;
         }
         return result;
+    }
+
+    getViewport() {
+        try {
+            if (!this.network) return null;
+            const position = this.network.getViewPosition();
+            const scale = this.network.getScale();
+            if (!position || !Number.isFinite(scale)) return null;
+            return {
+                x: position.x,
+                y: position.y,
+                scale
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    restoreViewport(viewport, options = {}) {
+        if (!viewport || !this.network) return;
+        const position = {
+            x: Number(viewport.x),
+            y: Number(viewport.y)
+        };
+        const scale = Number(viewport.scale);
+        if (!Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(scale)) return;
+
+        this.network.moveTo({
+            position,
+            scale,
+            animation: options.animation || false
+        });
     }
 
     addNode(label, x, y) {
@@ -577,6 +611,7 @@ class GraphEditor {
         this.mode = mode;
         if (mode === 'run') {
             // Disable layout engine so it doesn't override algorithm-computed positions
+            this.lockLayout();
             this.network.setOptions({
                 interaction: { dragNodes: false, dragView: true, zoomView: true },
                 physics: { enabled: false },
@@ -589,13 +624,39 @@ class GraphEditor {
         }
     }
 
+    lockLayout() {
+        this._layoutLocked = true;
+        if (!this.network) return;
+        this.network.setOptions({
+            physics: { enabled: false },
+            layout: { hierarchical: { enabled: false } }
+        });
+    }
+
+    unlockLayout() {
+        this._layoutLocked = false;
+    }
+
+    isLayoutLocked() {
+        return !!this._layoutLocked;
+    }
+
     togglePhysics() {
+        if (this._layoutLocked) return false;
         const enabled = this.network.physics.options.enabled;
         this.network.setOptions({ physics: { enabled: !enabled } });
         return !enabled;
     }
 
     setLayoutMode(mode) {
+        if (this._layoutLocked) {
+            this.network.setOptions({
+                physics: { enabled: false },
+                layout: { hierarchical: { enabled: false } }
+            });
+            return;
+        }
+
         if (mode === 'hierarchical') {
             this.network.setOptions({
                 layout: {
@@ -837,6 +898,13 @@ class GraphEditor {
     restoreSnapshot(data, options = {}) {
         this._restoreSnapshot(data);
         if (options.save) this._scheduleSave();
+        if (options.viewport !== false && data && data.viewport) {
+            setTimeout(() => {
+                try {
+                    this.restoreViewport(data.viewport);
+                } catch (e) {}
+            }, 0);
+        }
         if (options.fit) {
             setTimeout(() => {
                 try {
