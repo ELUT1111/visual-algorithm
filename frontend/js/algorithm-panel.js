@@ -1410,6 +1410,46 @@ class AlgorithmPanel {
             }
         });
 
+        const scrubToClientX = (clientX) => {
+            if (slider.disabled || !this._timelineCanReview()) return;
+            const rect = slider.getBoundingClientRect();
+            if (!rect.width) return;
+
+            const min = Number(slider.min || 0);
+            const max = Number(slider.max || 0);
+            const step = Number(slider.step || 1) || 1;
+            const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const value = Math.max(min, Math.min(max, Math.round((min + ratio * (max - min)) / step) * step));
+
+            this._stopTimelinePlayback();
+            this._renderTimelineIndex(value);
+        };
+
+        let activeTimelinePointerId = null;
+        slider.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0 || slider.disabled) return;
+            activeTimelinePointerId = e.pointerId;
+            try {
+                slider.setPointerCapture(e.pointerId);
+            } catch (err) {}
+            scrubToClientX(e.clientX);
+            e.preventDefault();
+        });
+        slider.addEventListener('pointermove', (e) => {
+            if (activeTimelinePointerId !== e.pointerId) return;
+            scrubToClientX(e.clientX);
+            e.preventDefault();
+        });
+        const stopPointerScrub = (e) => {
+            if (activeTimelinePointerId !== e.pointerId) return;
+            activeTimelinePointerId = null;
+            try {
+                slider.releasePointerCapture(e.pointerId);
+            } catch (err) {}
+        };
+        slider.addEventListener('pointerup', stopPointerScrub);
+        slider.addEventListener('pointercancel', stopPointerScrub);
+
         slider.addEventListener('input', (e) => {
             this._stopTimelinePlayback();
             this._renderTimelineIndex(parseInt(e.target.value, 10));

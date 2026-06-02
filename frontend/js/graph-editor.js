@@ -411,11 +411,18 @@ class GraphEditor {
     }
 
     toJSON() {
+        let positions = {};
+        try {
+            positions = this.network ? this.network.getPositions() : {};
+        } catch (e) {
+            positions = {};
+        }
+
         const nodes = this.nodes.get().map(n => ({
             id: String(n.id),
             label: n.label || String(n.id),
-            x: n.x,
-            y: n.y,
+            x: positions[n.id] ? positions[n.id].x : n.x,
+            y: positions[n.id] ? positions[n.id].y : n.y,
             metadata: n._metadata || {}
         }));
 

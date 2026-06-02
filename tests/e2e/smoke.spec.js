@@ -132,6 +132,51 @@ test('loads a graph-backed example and prepares its parameters', async ({ page }
   await expect(page.locator('#status-badge')).toContainText('dijkstra');
 });
 
+test('keeps graph layout stable when scrubbing the timeline slider', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('dijkstra');
+  await page.locator('.algo-card[data-key="graph/dijkstra"]').click();
+  await page.locator('.example-select').selectOption({ label: 'City distances' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#timeline-slider')).toBeEnabled();
+
+  const before = await page.evaluate(() => {
+    const positions = Object.values(window.app.graphEditor.network.getPositions());
+    const xs = positions.map(pos => pos.x);
+    const ys = positions.map(pos => pos.y);
+    return {
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys)
+    };
+  });
+
+  const total = await page.locator('#timeline-slider').evaluate(slider => Number(slider.max));
+  const sliderBox = await page.locator('#timeline-slider').boundingBox();
+  expect(sliderBox).not.toBeNull();
+  await page.mouse.click(sliderBox.x + sliderBox.width * 0.2, sliderBox.y + sliderBox.height / 2);
+  await expect.poll(async () => page.locator('#timeline-label').textContent()).not.toBe(`${total} / ${total}`);
+
+  const after = await page.evaluate(() => {
+    const positions = Object.values(window.app.graphEditor.network.getPositions());
+    const xs = positions.map(pos => pos.x);
+    const ys = positions.map(pos => pos.y);
+    return {
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys)
+    };
+  });
+
+  expect(before.width).toBeGreaterThan(100);
+  expect(before.height).toBeGreaterThan(100);
+  expect(after.width).toBeGreaterThan(100);
+  expect(after.height).toBeGreaterThan(100);
+});
+
 test('runs a string matching algorithm and renders structured state', async ({ page }) => {
   await page.goto('/');
 
