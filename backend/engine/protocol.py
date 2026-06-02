@@ -30,6 +30,15 @@ class StepAction(str, Enum):
     REMOVE_NODE = "remove_node"
     REMOVE_EDGE = "remove_edge"
     UPDATE_NODE_POSITION = "update_node_position"
+    RENDER_ARRAY = "render_array"
+    UPDATE_ARRAY_ITEM = "update_array_item"
+    HIGHLIGHT_ARRAY_ITEM = "highlight_array_item"
+    SWAP_ARRAY_ITEMS = "swap_array_items"
+    CLEAR_ARRAY = "clear_array"
+    RENDER_MATRIX = "render_matrix"
+    UPDATE_MATRIX_CELL = "update_matrix_cell"
+    HIGHLIGHT_MATRIX_CELL = "highlight_matrix_cell"
+    CLEAR_MATRIX = "clear_matrix"
 
 
 @dataclass
@@ -65,6 +74,7 @@ class AlgorithmMeta:
     builds_structure: bool = False
     requires_weighted: bool = False
     requires_directed: bool = False
+    requires_undirected: bool = False
     requires_dag: bool = False
     allows_negative_weights: bool = True
     time_complexity: str = ""
@@ -72,6 +82,7 @@ class AlgorithmMeta:
     use_cases: list[str] = field(default_factory=list)
     pseudocode: str = ""
     layout: str = "force"  # "force" or "hierarchical"
+    visualization: str = "graph"  # "graph", "array", "matrix"
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +95,7 @@ class AlgorithmMeta:
             "builds_structure": self.builds_structure,
             "requires_weighted": self.requires_weighted,
             "requires_directed": self.requires_directed,
+            "requires_undirected": self.requires_undirected,
             "requires_dag": self.requires_dag,
             "allows_negative_weights": self.allows_negative_weights,
             "time_complexity": self.time_complexity,
@@ -91,6 +103,7 @@ class AlgorithmMeta:
             "use_cases": self.use_cases,
             "pseudocode": self.pseudocode,
             "layout": self.layout,
+            "visualization": self.visualization,
         }
 
 

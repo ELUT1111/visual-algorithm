@@ -8,12 +8,14 @@ import string
 import sys
 import uuid
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.engine.registry import registry
+from backend.models.graph import Graph
 
 router = APIRouter()
 
@@ -135,6 +137,8 @@ def _random_text(length: int) -> str:
 def _generate_params(algo_meta, graph_data: dict, complexity: str | None) -> dict:
     """Generate random parameters for an algorithm."""
     params = {}
+    generated_values: list[int | str] = []
+    generated_text = ""
 
     # Pick complexity
     if complexity not in _COMPLEXITY:
@@ -147,17 +151,74 @@ def _generate_params(algo_meta, graph_data: dict, complexity: str | None) -> dic
         name = p["name"]
 
         if name == "values":
-            params[name] = _random_values(count)
+            if algo_meta.name == "binary_search":
+                values = sorted(random.sample(range(1, 999), min(count, 999)))
+                generated_values = values
+                params[name] = ",".join(str(v) for v in values)
+            elif algo_meta.name == "kadane":
+                values = [random.randint(-30, 40) for _ in range(count)]
+                generated_values = values
+                params[name] = ",".join(str(v) for v in values)
+            else:
+                values = [int(v) for v in _random_values(count).split(",")]
+                generated_values = values
+                params[name] = ",".join(str(v) for v in values)
+        elif name == "coins":
+            coins = sorted(random.sample(range(1, 15), min(4, count)))
+            generated_values = coins
+            params[name] = ",".join(str(v) for v in coins)
+        elif name == "amount":
+            if generated_values:
+                params[name] = str(random.randint(max(1, int(max(generated_values))), max(8, int(sum(generated_values)) * 2)))
+            else:
+                params[name] = str(random.randint(8, 40))
+        elif name == "weights":
+            weights = [random.randint(1, 9) for _ in range(count)]
+            generated_values = weights
+            params[name] = ",".join(str(v) for v in weights)
+        elif name == "capacity":
+            if generated_values:
+                params[name] = str(max(1, sum(int(v) for v in generated_values) // 2))
+            else:
+                params[name] = str(random.randint(5, 30))
+        elif name == "dimensions":
+            dims = [random.randint(5, 80) for _ in range(max(4, min(count, 7)))]
+            params[name] = ",".join(str(v) for v in dims)
+        elif name == "n":
+            params[name] = str(random.randint(5, min(20, max(5, count + 5))))
+        elif name == "query_index":
+            params[name] = str(random.randint(1, max(1, count)))
         elif name == "words":
             params[name] = _random_words(count)
         elif name == "patterns":
             params[name] = _random_words(min(count, 5))
         elif name == "text":
-            params[name] = _random_text(count)
+            if algo_meta.name == "kmp":
+                seed = random.choice(_COMMON_WORDS)
+                generated_text = f"{_random_text(4)}{seed}{_random_text(3)}{seed}"
+            else:
+                generated_text = _random_text(count)
+            params[name] = generated_text
+        elif name == "pattern":
+            if generated_text and len(generated_text) >= 4:
+                start = random.randint(0, max(0, len(generated_text) - 3))
+                params[name] = generated_text[start:start + 3]
+            else:
+                params[name] = random.choice(_COMMON_WORDS)
+        elif name in ("text_a", "text_b"):
+            params[name] = _random_text(max(4, min(count, 12)))
         elif name == "order":
             params[name] = str(cfg["order"])
         elif name in ("source", "target", "start", "end", "from", "to"):
-            if node_ids:
+            if name == "target" and algo_meta.name == "subset_sum" and generated_values:
+                sample_size = random.randint(1, min(4, len(generated_values)))
+                params[name] = str(sum(int(v) for v in random.sample(generated_values, sample_size)))
+            elif name == "target" and algo_meta.name in {"edmonds_karp", "dinic"} and node_ids:
+                choices = [node_id for node_id in node_ids if node_id != params.get("source")]
+                params[name] = random.choice(choices or node_ids)
+            elif name == "target" and generated_values:
+                params[name] = str(random.choice(generated_values))
+            elif node_ids:
                 params[name] = random.choice(node_ids)
             else:
                 params[name] = p.get("default", "")
@@ -173,6 +234,12 @@ class RandomParamsRequest(BaseModel):
     complexity: str | None = None  # "simple" | "medium" | "complex" | None=random
 
 
+class CompareAlgorithmsRequest(BaseModel):
+    algorithm_keys: list[str] = Field(min_length=1, max_length=8)
+    graph: dict = Field(default_factory=dict)
+    params: dict = Field(default_factory=dict)
+
+
 @router.post("/random-params")
 def generate_random_params(req: RandomParamsRequest):
     """Generate random parameters for a given algorithm."""
@@ -184,6 +251,128 @@ def generate_random_params(req: RandomParamsRequest):
     meta = algo.get_meta()
     params = _generate_params(meta, req.graph, req.complexity)
     return {"params": params, "complexity": req.complexity or "random"}
+
+
+def _summarize_final_state(state: dict | None) -> dict:
+    if not state:
+        return {}
+
+    preferred_keys = [
+        "found",
+        "index",
+        "distance",
+        "distances",
+        "negative_cycle",
+        "max_flow",
+        "matches",
+        "length",
+        "lcs",
+        "min_cost",
+        "fib_n",
+        "subset_found",
+        "selected_sum",
+        "min_coins",
+        "max_value",
+        "max_sum",
+        "sorted",
+        "array",
+        "components",
+        "cycle",
+        "topological_order",
+        "mst_weight",
+    ]
+    summary = {key: state[key] for key in preferred_keys if key in state}
+    if summary:
+        return summary
+    return {key: value for key, value in list(state.items())[:5]}
+
+
+def _collect_step_metrics(steps: list[dict]) -> dict:
+    phases: dict[str, int] = {}
+    actions: dict[str, int] = {}
+    visited_nodes: set[str] = set()
+    highlighted_edges: set[str] = set()
+
+    for step in steps:
+        phase = step.get("phase") or "unknown"
+        action = step.get("action") or "unknown"
+        phases[phase] = phases.get(phase, 0) + 1
+        actions[action] = actions.get(action, 0) + 1
+
+        if step.get("target_type") == "node":
+            target_id = step.get("target_id")
+            if target_id:
+                visited_nodes.add(str(target_id))
+        if step.get("target_type") == "edge":
+            target_id = step.get("target_id")
+            if target_id:
+                highlighted_edges.add(str(target_id))
+
+    return {
+        "phase_counts": dict(sorted(phases.items())),
+        "action_counts": dict(sorted(actions.items())),
+        "visited_node_count": len(visited_nodes),
+        "touched_edge_count": len(highlighted_edges),
+    }
+
+
+@router.post("/compare")
+def compare_algorithms(req: CompareAlgorithmsRequest):
+    """Run multiple algorithms on the same input and return a compact comparison."""
+    graph = Graph(**req.graph)
+    results = []
+
+    # Local import avoids coupling router module import order.
+    from backend.routers.ws_algorithm import _validate_runner_inputs
+
+    for key in req.algorithm_keys:
+        started = time.perf_counter()
+        try:
+            algo = registry.get(key)
+            meta = algo.get_meta()
+            params = dict(req.params)
+            _validate_runner_inputs(key, meta, graph, params)
+
+            steps = [step.to_dict() for step in algo.run(graph, params)]
+            elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
+            final_state = steps[-1].get("state") if steps else None
+            metrics = _collect_step_metrics(steps)
+
+            results.append({
+                "algorithm_key": key,
+                "name": meta.name,
+                "category": meta.category,
+                "status": "ok",
+                "step_count": len(steps),
+                "duration_ms": elapsed_ms,
+                "visited_node_count": metrics["visited_node_count"],
+                "touched_edge_count": metrics["touched_edge_count"],
+                "phase_counts": metrics["phase_counts"],
+                "action_counts": metrics["action_counts"],
+                "summary": _summarize_final_state(final_state),
+            })
+        except Exception as e:
+            elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
+            results.append({
+                "algorithm_key": key,
+                "name": key.split("/")[-1],
+                "category": key.split("/")[0] if "/" in key else "",
+                "status": "error",
+                "step_count": 0,
+                "duration_ms": elapsed_ms,
+                "visited_node_count": 0,
+                "touched_edge_count": 0,
+                "phase_counts": {},
+                "action_counts": {},
+                "summary": {},
+                "error": str(e),
+            })
+
+    return {
+        "algorithm_count": len(results),
+        "params": req.params,
+        "results": results,
+    }
 
 
 @router.post("/custom")

@@ -20,6 +20,7 @@ class PrimAlgorithm(AlgorithmProtocol):
                 {"name": "source", "type": "str", "required": False, "default": "", "description": "Start node (optional)"}
             ],
             requires_weighted=True,
+            requires_undirected=True,
             time_complexity="O((V + E) log V)",
             space_complexity="O(V)",
             use_cases=[

@@ -46,6 +46,28 @@ frontend_dir = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
 
+def _build_health_payload() -> dict:
+    metas = registry.list_all()
+    category_counts: dict[str, int] = {}
+    visualization_counts: dict[str, int] = {}
+
+    for meta in metas:
+        category_counts[meta.category] = category_counts.get(meta.category, 0) + 1
+        visualization_counts[meta.visualization] = visualization_counts.get(meta.visualization, 0) + 1
+
+    return {
+        "status": "ok",
+        "algorithm_count": len(registry.list_keys()),
+        "categories": dict(sorted(category_counts.items())),
+        "visualizations": dict(sorted(visualization_counts.items())),
+    }
+
+
+@app.get("/health")
+async def health():
+    return _build_health_payload()
+
+
 @app.get("/")
 async def root():
     index_file = frontend_dir / "index.html"

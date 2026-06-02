@@ -799,6 +799,7 @@ class GraphEditor {
         this.nodes.clear();
         this.edges.clear();
         this._directed = data.directed || false;
+        this._rootId = data.root_id || null;
 
         const visNodes = (data.nodes || []).map(n => ({
             id: n.id,
@@ -818,11 +819,24 @@ class GraphEditor {
             width: 2,
             arrows: (e.directed || this._directed) ? { to: { enabled: true, scaleFactor: 0.8 } } : undefined,
             _weight: e.weight,
-            _metadata: e.metadata || {}
+            _metadata: e.metadata || {},
+            _originalLabel: e.label || (e.weight !== 1 ? String(e.weight) : '')
         }));
 
         this.nodes.add(visNodes);
         this.edges.add(visEdges);
+    }
+
+    restoreSnapshot(data, options = {}) {
+        this._restoreSnapshot(data);
+        if (options.save) this._scheduleSave();
+        if (options.fit) {
+            setTimeout(() => {
+                try {
+                    this.fitAll();
+                } catch (e) {}
+            }, 0);
+        }
     }
 
     restoreFromStorage() {

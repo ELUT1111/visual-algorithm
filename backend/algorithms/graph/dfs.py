@@ -65,6 +65,15 @@ class DFSAlgorithm(AlgorithmProtocol):
         parent = {source: None}
         stack = [source]
 
+        def traversal_state(current: str | None = None) -> dict:
+            return {
+                "current": current,
+                "target": target,
+                "stack": list(stack),
+                "visited": sorted(visited),
+                "parent": {node: pred for node, pred in parent.items() if pred is not None},
+            }
+
         yield Step(
             action=StepAction.SET_NODE_COLOR,
             target_type="node",
@@ -72,6 +81,7 @@ class DFSAlgorithm(AlgorithmProtocol):
             value="current",
             message=f"Starting DFS from node {source}",
             phase="init",
+            state=traversal_state(source),
         )
 
         while stack:
@@ -84,6 +94,7 @@ class DFSAlgorithm(AlgorithmProtocol):
                 value="current",
                 message=f"Popped: {current}",
                 phase="explore",
+                state=traversal_state(current),
             )
 
             if target and current == target:
@@ -102,6 +113,7 @@ class DFSAlgorithm(AlgorithmProtocol):
                     value=path,
                     message=f"Found target {target}! Path: {' -> '.join(path)}",
                     phase="result",
+                    state={**traversal_state(current), "path": path, "found": True},
                 )
                 return
 
@@ -119,6 +131,7 @@ class DFSAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message=f"Discovered {neighbor} via {current}",
                         phase="explore",
+                        state=traversal_state(current),
                     )
 
                     yield Step(
@@ -128,6 +141,7 @@ class DFSAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message=f"Pushed: {neighbor}",
                         phase="explore",
+                        state=traversal_state(current),
                     )
 
             yield Step(
@@ -137,6 +151,7 @@ class DFSAlgorithm(AlgorithmProtocol):
                 value="visited",
                 message=f"Node {current} fully explored",
                 phase="finalize",
+                state=traversal_state(current),
             )
 
         if target:
@@ -146,6 +161,7 @@ class DFSAlgorithm(AlgorithmProtocol):
                 target_id="",
                 message=f"Target {target} not reachable from {source}",
                 phase="result",
+                state={**traversal_state(), "found": False},
             )
         else:
             yield Step(
@@ -154,4 +170,5 @@ class DFSAlgorithm(AlgorithmProtocol):
                 target_id="",
                 message=f"DFS complete. Visited {len(visited)} nodes.",
                 phase="result",
+                state=traversal_state(),
             )

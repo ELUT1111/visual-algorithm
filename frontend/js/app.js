@@ -160,7 +160,7 @@ class App {
         if (!handle || !bottomPanel || !mainContent) return;
 
         const STORAGE_KEY = 'val_bottomPanelHeight';
-        const MIN_HEIGHT = 96;   // control bar (56) + 40 min log
+        const MIN_HEIGHT = 180;  // control bar (56) + timeline (38) + state/log minimum
         const MAX_RATIO = 0.6;
 
         // Restore saved height

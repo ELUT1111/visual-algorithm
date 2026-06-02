@@ -9,12 +9,35 @@ class AlgorithmPanel {
         this.isRunning = false;
         this.isPaused = false;
         this.selectedAlgorithm = null;
+        this.selectedVisualization = 'graph';
         this.algorithms = [];
+        this.searchQuery = '';
+        this.selectedLearningPath = 'all';
+        this.categoryCollapsed = new Set();
+        this.exampleInputs = this._buildExampleInputs();
+        this.learningPaths = this._buildLearningPaths();
+        this.favoriteAlgorithms = new Set(this._loadStoredList('val_favoriteAlgorithms'));
+        this.recentAlgorithms = this._loadStoredList('val_recentAlgorithms');
+        this.timeline = {
+            baseGraph: null,
+            algorithmKey: null,
+            params: {},
+            startedAt: null,
+            finishedAt: null,
+            steps: [],
+            currentIndex: 0,
+            completed: false,
+            playbackTimer: null,
+            playbackActive: false
+        };
+        this.runMetrics = this._createEmptyRunMetrics();
     }
 
     async init() {
         await this._loadAlgorithms();
+        this._setupAlgorithmSearch();
         this._setupControls();
+        this._setupTimelineControls();
         this._setupWSHandlers();
     }
 
@@ -25,10 +48,226 @@ class AlgorithmPanel {
                 throw new Error(`Server error: ${response.status}`);
             }
             this.algorithms = await response.json();
+            this._renderAlgorithmOverview();
+            this._renderLearningPaths();
+            this._renderQuickAccess();
             this._renderAlgorithmCards();
         } catch (e) {
             console.error('Failed to load algorithms:', e);
             showToast('Failed to load algorithms', 'error');
+        }
+    }
+
+    _renderAlgorithmOverview() {
+        const container = document.getElementById('algorithm-overview');
+        if (!container) return;
+
+        const categoryCounts = this.algorithms.reduce((counts, algo) => {
+            counts[algo.category] = (counts[algo.category] || 0) + 1;
+            return counts;
+        }, {});
+        const visualizationCounts = this.algorithms.reduce((counts, algo) => {
+            const mode = algo.visualization || 'graph';
+            counts[mode] = (counts[mode] || 0) + 1;
+            return counts;
+        }, {});
+
+        const stats = [
+            ['Total', this.algorithms.length],
+            ['Graph', categoryCounts.graph || 0],
+            ['Tree', categoryCounts.tree || 0],
+            ['Array', categoryCounts.array || 0],
+            ['DP', categoryCounts.dp || 0],
+            ['String', categoryCounts.string || 0],
+            ['Views', Object.keys(visualizationCounts).length]
+        ];
+
+        container.innerHTML = '';
+        stats.forEach(([label, value]) => {
+            const item = document.createElement('div');
+            item.className = 'overview-stat';
+
+            const valueEl = document.createElement('div');
+            valueEl.className = 'overview-value';
+            valueEl.textContent = value;
+
+            const labelEl = document.createElement('div');
+            labelEl.className = 'overview-label';
+            labelEl.textContent = label;
+
+            item.appendChild(valueEl);
+            item.appendChild(labelEl);
+            container.appendChild(item);
+        });
+    }
+
+    _renderLearningPaths() {
+        const container = document.getElementById('learning-paths');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        const header = document.createElement('div');
+        header.className = 'learning-paths-title';
+        header.textContent = 'Learning paths';
+        container.appendChild(header);
+
+        const list = document.createElement('div');
+        list.className = 'learning-path-list';
+
+        const allPath = {
+            id: 'all',
+            label: 'All',
+            description: 'Show every registered algorithm.',
+            keys: this.algorithms.map(algo => `${algo.category}/${algo.name}`)
+        };
+        [allPath, ...this.learningPaths].forEach(path => {
+            const availableKeys = path.keys.filter(key => this._findAlgorithmByKey(key));
+            if (path.id !== 'all' && availableKeys.length === 0) return;
+
+            const button = document.createElement('button');
+            button.className = path.id === this.selectedLearningPath ? 'learning-path active' : 'learning-path';
+            button.type = 'button';
+            button.dataset.path = path.id;
+            button.title = path.description;
+
+            const label = document.createElement('span');
+            label.className = 'learning-path-label';
+            label.textContent = path.label;
+
+            const count = document.createElement('span');
+            count.className = 'learning-path-count';
+            count.textContent = availableKeys.length;
+
+            button.appendChild(label);
+            button.appendChild(count);
+            button.addEventListener('click', () => {
+                this.selectedLearningPath = path.id;
+                this._renderLearningPaths();
+                this._renderAlgorithmCards();
+            });
+            list.appendChild(button);
+        });
+
+        container.appendChild(list);
+    }
+
+    _renderQuickAccess() {
+        const container = document.getElementById('algorithm-quick-access');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        const favorites = [...this.favoriteAlgorithms]
+            .map(key => this._findAlgorithmByKey(key))
+            .filter(Boolean);
+        const recent = this.recentAlgorithms
+            .filter(key => !this.favoriteAlgorithms.has(key))
+            .map(key => this._findAlgorithmByKey(key))
+            .filter(Boolean)
+            .slice(0, 5);
+
+        if (favorites.length === 0 && recent.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'quick-access-empty';
+            empty.textContent = 'Star algorithms to pin them here.';
+            container.appendChild(empty);
+            return;
+        }
+
+        const sections = [
+            ['Favorites', favorites],
+            ['Recent', recent]
+        ];
+
+        sections.forEach(([label, algos]) => {
+            if (algos.length === 0) return;
+
+            const section = document.createElement('div');
+            section.className = 'quick-access-section';
+
+            const title = document.createElement('div');
+            title.className = 'quick-access-title';
+            title.textContent = label;
+            section.appendChild(title);
+
+            const list = document.createElement('div');
+            list.className = 'quick-access-list';
+
+            algos.forEach(algo => {
+                const key = `${algo.category}/${algo.name}`;
+                const button = document.createElement('button');
+                button.className = key === this.selectedAlgorithm ? 'quick-access-item active' : 'quick-access-item';
+                button.type = 'button';
+                button.dataset.key = key;
+                button.title = `${algo.category}/${algo.name}`;
+
+                const emoji = document.createElement('span');
+                emoji.className = 'quick-access-emoji';
+                emoji.textContent = algo.emoji || '';
+
+                const name = document.createElement('span');
+                name.className = 'quick-access-name';
+                name.textContent = algo.name;
+
+                button.appendChild(emoji);
+                button.appendChild(name);
+                button.addEventListener('click', () => this._selectAlgorithmByKey(key));
+                list.appendChild(button);
+            });
+
+            section.appendChild(list);
+            container.appendChild(section);
+        });
+    }
+
+    _toggleFavorite(key) {
+        if (this.favoriteAlgorithms.has(key)) {
+            this.favoriteAlgorithms.delete(key);
+        } else {
+            this.favoriteAlgorithms.add(key);
+        }
+        this._storeList('val_favoriteAlgorithms', [...this.favoriteAlgorithms]);
+        this._renderQuickAccess();
+        this._renderAlgorithmCards();
+    }
+
+    _recordRecentAlgorithm(key) {
+        this.recentAlgorithms = [key, ...this.recentAlgorithms.filter(item => item !== key)].slice(0, 8);
+        this._storeList('val_recentAlgorithms', this.recentAlgorithms);
+        this._renderQuickAccess();
+    }
+
+    _selectAlgorithmByKey(key) {
+        const algo = this._findAlgorithmByKey(key);
+        if (!algo) return;
+
+        const searchInput = document.getElementById('algorithm-search');
+        this.searchQuery = '';
+        if (searchInput) searchInput.value = '';
+        this.selectedLearningPath = 'all';
+        this.categoryCollapsed.clear();
+        this._renderLearningPaths();
+        this._renderAlgorithmCards();
+
+        const card = document.querySelector(`.algo-card[data-key="${key}"]`);
+        this._selectAlgorithm(algo, card);
+    }
+
+    _loadStoredList(key) {
+        try {
+            const value = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(value) ? value.filter(item => typeof item === 'string') : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    _storeList(key, values) {
+        try {
+            localStorage.setItem(key, JSON.stringify(values));
+        } catch (e) {
+            // Ignore storage failures; quick access is a non-critical convenience.
         }
     }
 
@@ -42,10 +281,33 @@ class AlgorithmPanel {
             categories[algo.category].push(algo);
         });
 
-        const categoryOrder = ['graph', 'tree'];
+        const query = this.searchQuery.trim().toLowerCase();
+        const activePath = this._getActiveLearningPath();
+        const activePathKeys = activePath ? new Set(activePath.keys) : null;
+        const matchesSearch = (algo) => {
+            if (!query) return true;
+            const fields = [
+                algo.name,
+                algo.category,
+                algo.description,
+                algo.time_complexity,
+                algo.space_complexity,
+                ...(algo.use_cases || [])
+            ];
+            return fields.some(field => String(field || '').toLowerCase().includes(query));
+        };
+        const matchesLearningPath = (algo) => {
+            if (!activePathKeys) return true;
+            return activePathKeys.has(`${algo.category}/${algo.name}`);
+        };
+
+        const categoryOrder = ['graph', 'tree', 'array', 'dp', 'string'];
         const categoryLabels = {
             graph: { emoji: '📊', label: 'Graph Algorithms' },
-            tree: { emoji: '🌲', label: 'Tree Algorithms' }
+            tree: { emoji: '🌲', label: 'Tree Algorithms' },
+            array: { emoji: '🔢', label: 'Array Algorithms' },
+            dp: { emoji: '🧮', label: 'Dynamic Programming' },
+            string: { emoji: '🔤', label: 'String Algorithms' }
         };
 
         const orderedCats = [
@@ -54,7 +316,10 @@ class AlgorithmPanel {
         ];
 
         orderedCats.forEach(cat => {
-            const algos = categories[cat];
+            const totalCount = categories[cat].length;
+            const algos = categories[cat].filter(algo => matchesLearningPath(algo) && matchesSearch(algo));
+            if (algos.length === 0) return;
+
             const catInfo = categoryLabels[cat] || { emoji: '📋', label: cat };
 
             // Category header (collapsible)
@@ -71,11 +336,10 @@ class AlgorithmPanel {
 
             const catCount = document.createElement('span');
             catCount.className = 'category-count';
-            catCount.textContent = algos.length;
+            catCount.textContent = query ? `${algos.length}/${totalCount}` : algos.length;
 
             const catToggle = document.createElement('span');
             catToggle.className = 'category-toggle';
-            catToggle.textContent = '▼';
 
             header.appendChild(catEmoji);
             header.appendChild(catLabel);
@@ -84,16 +348,25 @@ class AlgorithmPanel {
 
             const algoContainer = document.createElement('div');
             algoContainer.className = 'category-algos';
+            const isCollapsed = !query && this.categoryCollapsed.has(cat);
+            if (isCollapsed) algoContainer.classList.add('collapsed');
+            catToggle.textContent = isCollapsed ? '▶' : '▼';
 
             header.addEventListener('click', () => {
-                const isCollapsed = algoContainer.classList.toggle('collapsed');
-                catToggle.textContent = isCollapsed ? '▶' : '▼';
+                const nextCollapsed = algoContainer.classList.toggle('collapsed');
+                catToggle.textContent = nextCollapsed ? '▶' : '▼';
+                if (nextCollapsed) {
+                    this.categoryCollapsed.add(cat);
+                } else {
+                    this.categoryCollapsed.delete(cat);
+                }
             });
 
             algos.forEach(algo => {
+                const key = `${algo.category}/${algo.name}`;
                 const card = document.createElement('div');
-                card.className = 'algo-card';
-                card.dataset.key = `${algo.category}/${algo.name}`;
+                card.className = key === this.selectedAlgorithm ? 'algo-card selected' : 'algo-card';
+                card.dataset.key = key;
 
                 const emojiSpan = document.createElement('span');
                 emojiSpan.className = 'algo-emoji';
@@ -110,11 +383,23 @@ class AlgorithmPanel {
                 descDiv.className = 'algo-desc';
                 descDiv.textContent = algo.description;
 
+                const favoriteBtn = document.createElement('button');
+                favoriteBtn.className = this.favoriteAlgorithms.has(key) ? 'algo-favorite active' : 'algo-favorite';
+                favoriteBtn.type = 'button';
+                favoriteBtn.title = this.favoriteAlgorithms.has(key) ? 'Remove favorite' : 'Add favorite';
+                favoriteBtn.setAttribute('aria-label', `${this.favoriteAlgorithms.has(key) ? 'Remove' : 'Add'} ${algo.name} favorite`);
+                favoriteBtn.textContent = '★';
+                favoriteBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this._toggleFavorite(key);
+                });
+
                 infoDiv.appendChild(nameDiv);
                 infoDiv.appendChild(descDiv);
 
                 card.appendChild(emojiSpan);
                 card.appendChild(infoDiv);
+                card.appendChild(favoriteBtn);
 
                 card.addEventListener('click', () => this._selectAlgorithm(algo, card));
                 algoContainer.appendChild(card);
@@ -123,85 +408,842 @@ class AlgorithmPanel {
             container.appendChild(header);
             container.appendChild(algoContainer);
         });
+
+        if (!container.children.length) {
+            const empty = document.createElement('div');
+            empty.className = 'algorithm-empty';
+            const pathText = activePath ? ` in ${activePath.label}` : '';
+            empty.textContent = `No algorithms match "${this.searchQuery.trim()}"${pathText}`;
+            container.appendChild(empty);
+        }
+    }
+
+    _setupAlgorithmSearch() {
+        const input = document.getElementById('algorithm-search');
+        const clearBtn = document.getElementById('btn-clear-algo-search');
+        if (!input) return;
+
+        input.addEventListener('input', () => {
+            this.searchQuery = input.value;
+            this._renderAlgorithmCards();
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                input.value = '';
+                this.searchQuery = '';
+                this._renderAlgorithmCards();
+                input.focus();
+            });
+        }
     }
 
     _selectAlgorithm(algo, card) {
         // Deselect previous
         document.querySelectorAll('.algo-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
+        if (card) card.classList.add('selected');
 
         this.selectedAlgorithm = `${algo.category}/${algo.name}`;
+        this._recordRecentAlgorithm(this.selectedAlgorithm);
+
+        const visualization = algo.visualization || 'graph';
+        this.selectedVisualization = visualization;
+        if (this.visualizer && this.visualizer.setVisualizationMode) {
+            this.visualizer.setVisualizationMode(visualization);
+            if (visualization !== 'graph' && this.visualizer.clearStructure) {
+                this.visualizer.clearStructure();
+            }
+        }
 
         // Switch structure type based on algorithm category
         const isTree = algo.category === 'tree';
-        this.editor.setStructureType(isTree ? 'tree' : 'graph');
+        if (visualization === 'graph') {
+            this.editor.setStructureType(isTree ? 'tree' : 'graph');
+        }
         document.getElementById('btn-set-root').style.display = isTree ? '' : 'none';
 
-        // Show parameters
-        const paramSection = document.getElementById('param-section');
-        const paramForm = document.getElementById('param-form');
-
-        if (algo.parameters && algo.parameters.length > 0) {
-            paramSection.style.display = 'block';
-            paramForm.innerHTML = '';
-
-            // Get current node IDs for dropdowns
-            const nodeIds = this.editor.getNodeIds();
-
-            algo.parameters.forEach(param => {
-                const group = document.createElement('div');
-                group.className = 'param-group';
-
-                const label = document.createElement('label');
-                label.textContent = param.description || param.name;
-                group.appendChild(label);
-
-                if (param.type === 'node' || (param.name === 'source' || param.name === 'target' || param.name === 'start')) {
-                    const select = document.createElement('select');
-                    select.id = `param-${param.name}`;
-
-                    const defaultOpt = document.createElement('option');
-                    defaultOpt.value = '';
-                    defaultOpt.textContent = '-- Select Node --';
-                    select.appendChild(defaultOpt);
-
-                    nodeIds.forEach(id => {
-                        const opt = document.createElement('option');
-                        opt.value = id;
-                        opt.textContent = id;
-                        if (param.default === id) opt.selected = true;
-                        select.appendChild(opt);
-                    });
-
-                    group.appendChild(select);
-                } else {
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.id = `param-${param.name}`;
-                    input.value = param.default || '';
-                    input.placeholder = param.description || param.name;
-                    group.appendChild(input);
-                }
-                paramForm.appendChild(group);
-            });
-
-            // Add random params button
-            const randomBtn = document.createElement('button');
-            randomBtn.className = 'btn btn-sm btn-random';
-            randomBtn.innerHTML = '<span class="emoji-icon">🎲</span> Random';
-            randomBtn.type = 'button';
-            randomBtn.addEventListener('click', () => this._generateRandomParams(algo));
-            paramForm.appendChild(randomBtn);
-        } else {
-            paramSection.style.display = 'none';
-            paramForm.innerHTML = '';
-        }
+        this._renderParamSection(algo);
 
         document.getElementById('status-badge').textContent = `Selected: ${algo.emoji} ${algo.name}`;
         document.getElementById('status-badge').className = 'status-badge';
 
         // Populate education panel
         this._renderEduPanel(algo);
+    }
+
+    _renderParamSection(algo) {
+        const paramSection = document.getElementById('param-section');
+        const paramForm = document.getElementById('param-form');
+        const examples = this._getExampleInputs(algo);
+        const hasParams = algo.parameters && algo.parameters.length > 0;
+
+        if (!hasParams && examples.length === 0) {
+            paramSection.style.display = 'none';
+            paramForm.innerHTML = '';
+            return;
+        }
+
+        paramSection.style.display = 'block';
+        paramForm.innerHTML = '';
+
+        const errorPanel = document.createElement('div');
+        errorPanel.className = 'param-error-panel';
+        errorPanel.style.display = 'none';
+        paramForm.appendChild(errorPanel);
+
+        if (examples.length > 0) {
+            this._renderExampleControls(algo, paramForm, examples);
+        }
+
+        if (!hasParams) return;
+
+        const nodeIds = this.editor.getNodeIds();
+
+        algo.parameters.forEach(param => {
+            const group = document.createElement('div');
+            group.className = 'param-group';
+            group.dataset.paramName = param.name;
+
+            const label = document.createElement('label');
+            label.textContent = param.description || param.name;
+            group.appendChild(label);
+
+            const nodeParamNames = ['source', 'target', 'start', 'end', 'from', 'to'];
+            const isNodeParam = param.type === 'node' || (
+                nodeParamNames.includes(param.name) &&
+                algo.requires_graph !== false &&
+                (algo.visualization || 'graph') === 'graph'
+            );
+
+            if (isNodeParam) {
+                const select = document.createElement('select');
+                select.id = `param-${param.name}`;
+
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = '-- Select Node --';
+                select.appendChild(defaultOpt);
+
+                nodeIds.forEach(id => {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = id;
+                    if (param.default === id) opt.selected = true;
+                    select.appendChild(opt);
+                });
+
+                group.appendChild(select);
+            } else {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = `param-${param.name}`;
+                input.value = param.default || '';
+                input.placeholder = param.description || param.name;
+                group.appendChild(input);
+            }
+            paramForm.appendChild(group);
+        });
+
+        const randomBtn = document.createElement('button');
+        randomBtn.className = 'btn btn-sm btn-random';
+        randomBtn.innerHTML = '<span class="emoji-icon">🎲</span> Random';
+        randomBtn.type = 'button';
+        randomBtn.addEventListener('click', () => this._generateRandomParams(algo));
+        paramForm.appendChild(randomBtn);
+
+        this._renderCompareControls(algo, paramForm);
+    }
+
+    _clearParamErrors() {
+        const panel = document.querySelector('.param-error-panel');
+        if (panel) {
+            panel.textContent = '';
+            panel.style.display = 'none';
+        }
+        document.querySelectorAll('.param-group.error').forEach(group => group.classList.remove('error'));
+    }
+
+    _showParamError(message, fields = []) {
+        const panel = document.querySelector('.param-error-panel');
+        if (panel) {
+            panel.textContent = message || 'Input validation failed';
+            panel.style.display = 'block';
+        }
+
+        fields.forEach(name => {
+            const group = document.querySelector(`.param-group[data-param-name="${name}"]`);
+            if (group) group.classList.add('error');
+        });
+    }
+
+    _inferErrorFields(message) {
+        const text = String(message || '').toLowerCase();
+        const fields = [];
+        if (text.includes("parameter '")) {
+            const match = text.match(/parameter '([^']+)'/);
+            if (match) fields.push(match[1]);
+        }
+        if (text.includes('source')) fields.push('source');
+        if (text.includes('target')) fields.push('target');
+        if (text.includes('start')) fields.push('start');
+        if (text.includes('end')) fields.push('end');
+        if (text.includes('node')) {
+            ['source', 'target', 'start', 'end', 'from', 'to'].forEach(name => fields.push(name));
+        }
+        return [...new Set(fields)];
+    }
+
+    _renderExampleControls(algo, paramForm, examples) {
+        const panel = document.createElement('div');
+        panel.className = 'example-panel';
+
+        const label = document.createElement('label');
+        label.className = 'example-label';
+        label.textContent = 'Example input';
+
+        const row = document.createElement('div');
+        row.className = 'example-row';
+
+        const select = document.createElement('select');
+        select.className = 'example-select';
+
+        examples.forEach((example, index) => {
+            const opt = document.createElement('option');
+            opt.value = String(index);
+            opt.textContent = example.label;
+            select.appendChild(opt);
+        });
+
+        const loadBtn = document.createElement('button');
+        loadBtn.className = 'btn btn-sm btn-example';
+        loadBtn.type = 'button';
+        loadBtn.textContent = 'Load';
+
+        const desc = document.createElement('div');
+        desc.className = 'example-description';
+        const updateDescription = () => {
+            const selected = examples[parseInt(select.value, 10)] || examples[0];
+            desc.textContent = selected.description || '';
+        };
+
+        select.addEventListener('change', updateDescription);
+        loadBtn.addEventListener('click', () => {
+            const selected = examples[parseInt(select.value, 10)] || examples[0];
+            this._applyExampleInput(algo, selected);
+        });
+
+        row.appendChild(select);
+        row.appendChild(loadBtn);
+        panel.appendChild(label);
+        panel.appendChild(row);
+        panel.appendChild(desc);
+        paramForm.appendChild(panel);
+        updateDescription();
+    }
+
+    _renderCompareControls(algo, paramForm) {
+        const selectedKey = `${algo.category}/${algo.name}`;
+        const candidates = this._getCompareCandidates(selectedKey);
+        if (candidates.length < 2) return;
+
+        const panel = document.createElement('div');
+        panel.className = 'compare-panel';
+
+        const label = document.createElement('label');
+        label.className = 'compare-label';
+        label.textContent = 'Compare algorithms';
+
+        const list = document.createElement('div');
+        list.className = 'compare-options';
+
+        candidates.forEach(key => {
+            const candidate = this._findAlgorithmByKey(key);
+            if (!candidate) return;
+
+            const option = document.createElement('label');
+            option.className = 'compare-option';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = key;
+            checkbox.checked = true;
+            checkbox.disabled = key === selectedKey;
+
+            const name = document.createElement('span');
+            name.textContent = candidate.name;
+
+            option.appendChild(checkbox);
+            option.appendChild(name);
+            list.appendChild(option);
+        });
+
+        const runBtn = document.createElement('button');
+        runBtn.className = 'btn btn-sm btn-compare';
+        runBtn.type = 'button';
+        runBtn.textContent = 'Compare';
+        runBtn.addEventListener('click', () => this._runComparison(panel));
+
+        const output = document.createElement('div');
+        output.className = 'compare-results';
+
+        panel.appendChild(label);
+        panel.appendChild(list);
+        panel.appendChild(runBtn);
+        panel.appendChild(output);
+        paramForm.appendChild(panel);
+    }
+
+    _getCompareCandidates(selectedKey) {
+        const groups = [
+            ['graph/dijkstra', 'graph/bellman_ford', 'graph/spfa'],
+            ['graph/edmonds_karp', 'graph/dinic'],
+            ['string/kmp', 'string/rabin_karp', 'string/boyer_moore', 'string/z_algorithm'],
+            ['array/bubble_sort', 'array/quick_sort', 'array/merge_sort', 'array/heap_sort']
+        ];
+        const group = groups.find(items => items.includes(selectedKey)) || [];
+        return group.filter(key => this._findAlgorithmByKey(key));
+    }
+
+    async _runComparison(panel) {
+        if (!this._validateParams()) return;
+        this._clearParamErrors();
+
+        const output = panel.querySelector('.compare-results');
+        const selectedKeys = [...panel.querySelectorAll('.compare-option input:checked')]
+            .map(input => input.value);
+
+        if (selectedKeys.length < 2) {
+            showToast('Select at least two algorithms to compare', 'error');
+            return;
+        }
+
+        output.textContent = 'Comparing...';
+        const graph = this.editor.toJSON();
+        const params = this._collectParams();
+
+        try {
+            const response = await fetch('/api/algorithms/compare', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    algorithm_keys: selectedKeys,
+                    graph,
+                    params
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || 'Comparison failed');
+            }
+            this._renderComparisonResults(output, data.results || []);
+            showToast('Comparison complete', 'success');
+        } catch (e) {
+            output.textContent = '';
+            this._showParamError(e.message || 'Comparison failed', this._inferErrorFields(e.message));
+            showToast(e.message || 'Comparison failed', 'error');
+        }
+    }
+
+    _renderComparisonResults(output, results) {
+        output.innerHTML = '';
+        if (!results.length) {
+            output.textContent = 'No comparison results';
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'compare-table';
+
+        const thead = document.createElement('thead');
+        const header = document.createElement('tr');
+        ['Algorithm', 'Status', 'Steps', 'Nodes', 'Edges', 'Result'].forEach(text => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            header.appendChild(th);
+        });
+        thead.appendChild(header);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        results.forEach(result => {
+            const row = document.createElement('tr');
+            const cells = [
+                result.name || result.algorithm_key,
+                result.status,
+                result.step_count,
+                result.visited_node_count,
+                result.touched_edge_count,
+                result.status === 'ok'
+                    ? this._formatComparisonSummary(result.summary || {})
+                    : (result.error || 'error')
+            ];
+
+            cells.forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = this._formatStateValue(value);
+                td.title = td.textContent;
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        output.appendChild(table);
+    }
+
+    _formatComparisonSummary(summary) {
+        if (!summary || Object.keys(summary).length === 0) return '';
+        const preferred = [
+            'max_flow',
+            'distance',
+            'distances',
+            'matches',
+            'found',
+            'index',
+            'sorted',
+            'array',
+            'negative_cycle'
+        ];
+        const keys = preferred.filter(key => Object.prototype.hasOwnProperty.call(summary, key));
+        const shown = keys.length ? keys : Object.keys(summary).slice(0, 2);
+        return shown
+            .map(key => `${this._formatStateKey(key)}: ${this._formatInlineStateValue(summary[key])}`)
+            .join(', ');
+    }
+
+    _applyExampleInput(algo, example) {
+        if (!example) return;
+
+        if (example.graph) {
+            const graphData = JSON.parse(JSON.stringify(example.graph));
+            if (this.visualizer && this.visualizer.setVisualizationMode) {
+                this.visualizer.setVisualizationMode('graph');
+            }
+            this.editor.loadFromJSON(graphData);
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+        } else if (example.presetId) {
+            const preset = this._findPresetById(example.presetId);
+            if (!preset) {
+                showToast(`Preset '${example.presetId}' is not loaded yet`, 'error');
+                return;
+            }
+            if (this.visualizer && this.visualizer.setVisualizationMode) {
+                this.visualizer.setVisualizationMode('graph');
+            }
+            this.editor.loadFromJSON(JSON.parse(JSON.stringify(preset)));
+            document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+        }
+
+        this._renderParamSection(algo);
+        this._fillParamFields(example.params || {});
+        showToast(`Loaded example: ${example.label}`, 'success');
+    }
+
+    _fillParamFields(params) {
+        Object.entries(params || {}).forEach(([name, value]) => {
+            const el = document.getElementById(`param-${name}`);
+            if (el) {
+                el.value = value;
+                el.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+
+    _findPresetById(id) {
+        const manager = window.app && window.app.presetManager;
+        const presets = manager && Array.isArray(manager.presets) ? manager.presets : [];
+        return presets.find(preset => preset.id === id || preset.name === id) || null;
+    }
+
+    _getExampleInputs(algo) {
+        const key = `${algo.category}/${algo.name}`;
+        return this.exampleInputs[key] || [];
+    }
+
+    _getActiveLearningPath() {
+        if (this.selectedLearningPath === 'all') return null;
+        return this.learningPaths.find(path => path.id === this.selectedLearningPath) || null;
+    }
+
+    _buildLearningPaths() {
+        return [
+            {
+                id: 'graph-core',
+                label: 'Graph Core',
+                description: 'Traversal, shortest paths, MST, and graph structure basics.',
+                keys: [
+                    'graph/bfs',
+                    'graph/dfs',
+                    'graph/dijkstra',
+                    'graph/bellman_ford',
+                    'graph/prim',
+                    'graph/kruskal',
+                    'graph/topological_sort',
+                    'graph/connected_components'
+                ]
+            },
+            {
+                id: 'graph-advanced',
+                label: 'Graph Advanced',
+                description: 'SCCs, low-link analysis, all-pairs paths, and max flow.',
+                keys: [
+                    'graph/cycle_detection',
+                    'graph/tarjan_scc',
+                    'graph/kosaraju_scc',
+                    'graph/bridges_articulation',
+                    'graph/floyd_warshall',
+                    'graph/spfa',
+                    'graph/johnson',
+                    'graph/edmonds_karp',
+                    'graph/dinic'
+                ]
+            },
+            {
+                id: 'dp-foundations',
+                label: 'DP Foundations',
+                description: 'Classic table, sequence, and subset dynamic programming.',
+                keys: [
+                    'dp/fibonacci_dp',
+                    'dp/lcs',
+                    'dp/edit_distance',
+                    'dp/knapsack',
+                    'dp/coin_change',
+                    'dp/lis',
+                    'dp/matrix_chain_multiplication',
+                    'dp/subset_sum',
+                    'dp/word_break'
+                ]
+            },
+            {
+                id: 'strings',
+                label: 'String Matching',
+                description: 'Pattern matching and palindrome preprocessing algorithms.',
+                keys: [
+                    'string/kmp',
+                    'string/rabin_karp',
+                    'string/boyer_moore',
+                    'string/z_algorithm',
+                    'string/manacher'
+                ]
+            },
+            {
+                id: 'data-structures',
+                label: 'Data Structures',
+                description: 'Trees, heaps, tries, automata, and prefix-sum structures.',
+                keys: [
+                    'tree/bst',
+                    'tree/avl',
+                    'tree/red_black',
+                    'tree/btree',
+                    'tree/bplus',
+                    'tree/heap',
+                    'tree/fenwick_tree',
+                    'tree/trie',
+                    'tree/aho_corasick',
+                    'tree/huffman'
+                ]
+            },
+            {
+                id: 'arrays',
+                label: 'Arrays',
+                description: 'Sorting, searching, and linear array scans.',
+                keys: [
+                    'array/bubble_sort',
+                    'array/quick_sort',
+                    'array/merge_sort',
+                    'array/heap_sort',
+                    'array/binary_search',
+                    'array/kadane'
+                ]
+            }
+        ];
+    }
+
+    _buildExampleInputs() {
+        const ex = (label, description, params = {}, presetId = null, graph = null) => ({
+            label,
+            description,
+            params,
+            presetId,
+            graph
+        });
+
+        const astarGrid = {
+            name: 'A* Grid Route',
+            description: 'Small positioned graph for heuristic pathfinding',
+            directed: false,
+            nodes: [
+                { id: 'A', label: 'A', x: -220, y: -80 },
+                { id: 'B', label: 'B', x: -80, y: -140 },
+                { id: 'C', label: 'C', x: -60, y: 20 },
+                { id: 'D', label: 'D', x: 80, y: -120 },
+                { id: 'E', label: 'E', x: 100, y: 40 },
+                { id: 'F', label: 'F', x: 240, y: -20 }
+            ],
+            edges: [
+                { source: 'A', target: 'B', weight: 2, label: '2' },
+                { source: 'A', target: 'C', weight: 4, label: '4' },
+                { source: 'B', target: 'D', weight: 3, label: '3' },
+                { source: 'C', target: 'E', weight: 2, label: '2' },
+                { source: 'D', target: 'F', weight: 4, label: '4' },
+                { source: 'E', target: 'F', weight: 2, label: '2' },
+                { source: 'B', target: 'C', weight: 1, label: '1' },
+                { source: 'D', target: 'E', weight: 1, label: '1' }
+            ]
+        };
+
+        const negativeGraph = {
+            name: 'Negative Edge DAG',
+            description: 'Directed graph with negative edges and no negative cycle',
+            directed: true,
+            nodes: [
+                { id: 'S', label: 'S' },
+                { id: 'A', label: 'A' },
+                { id: 'B', label: 'B' },
+                { id: 'C', label: 'C' },
+                { id: 'T', label: 'T' }
+            ],
+            edges: [
+                { source: 'S', target: 'A', weight: 6, label: '6', directed: true },
+                { source: 'S', target: 'B', weight: 7, label: '7', directed: true },
+                { source: 'A', target: 'C', weight: 5, label: '5', directed: true },
+                { source: 'B', target: 'A', weight: -2, label: '-2', directed: true },
+                { source: 'B', target: 'C', weight: 4, label: '4', directed: true },
+                { source: 'C', target: 'T', weight: -1, label: '-1', directed: true }
+            ]
+        };
+
+        const flowNetwork = {
+            name: 'Flow Network',
+            description: 'Directed capacity network for max-flow algorithms',
+            directed: true,
+            nodes: [
+                { id: 'S', label: 'S', x: -260, y: 0 },
+                { id: 'A', label: 'A', x: -90, y: -90 },
+                { id: 'B', label: 'B', x: -90, y: 90 },
+                { id: 'C', label: 'C', x: 90, y: -90 },
+                { id: 'D', label: 'D', x: 90, y: 90 },
+                { id: 'T', label: 'T', x: 260, y: 0 }
+            ],
+            edges: [
+                { source: 'S', target: 'A', weight: 10, label: '10', directed: true },
+                { source: 'S', target: 'B', weight: 10, label: '10', directed: true },
+                { source: 'A', target: 'B', weight: 2, label: '2', directed: true },
+                { source: 'A', target: 'C', weight: 4, label: '4', directed: true },
+                { source: 'A', target: 'D', weight: 8, label: '8', directed: true },
+                { source: 'B', target: 'D', weight: 9, label: '9', directed: true },
+                { source: 'D', target: 'C', weight: 6, label: '6', directed: true },
+                { source: 'C', target: 'T', weight: 10, label: '10', directed: true },
+                { source: 'D', target: 'T', weight: 10, label: '10', directed: true }
+            ]
+        };
+
+        return {
+            'graph/bfs': [
+                ex('Social path', 'Loads the social network and searches Alice to Grace.', { source: 'Alice', target: 'Grace' }, 'social_network'),
+                ex('Unreachable target', 'Loads disconnected components and searches across components.', { source: 'A', target: 'G' }, 'disconnected_components')
+            ],
+            'graph/dfs': [
+                ex('Directed reachability', 'Loads the directed SCC graph and searches A to F.', { source: 'A', target: 'F' }, 'directed_cycle_scc'),
+                ex('Social traversal', 'Loads the social network and traverses from Alice.', { source: 'Alice', target: '' }, 'social_network')
+            ],
+            'graph/dijkstra': [
+                ex('City distances', 'Loads weighted city roads and starts from A.', { source: 'A' }, 'city_road_network'),
+                ex('DAG shortest paths', 'Loads the weighted DAG and starts from S.', { source: 'S' }, 'weighted_dag')
+            ],
+            'graph/astar': [
+                ex('Heuristic route', 'Loads a positioned graph so the A* heuristic is visible.', { source: 'A', target: 'F' }, null, astarGrid)
+            ],
+            'graph/bellman_ford': [
+                ex('Negative edges', 'Loads a DAG with negative edges and starts from S.', { source: 'S' }, null, negativeGraph),
+                ex('Weighted DAG', 'Loads the weighted DAG and starts from S.', { source: 'S' }, 'weighted_dag')
+            ],
+            'graph/spfa': [
+                ex('Negative edges', 'Queue-based relaxation on a graph with negative edges.', { source: 'S' }, null, negativeGraph),
+                ex('Weighted DAG', 'Shortest paths from S on a DAG.', { source: 'S' }, 'weighted_dag')
+            ],
+            'graph/johnson': [
+                ex('Negative all-pairs', 'All-pairs shortest paths with Johnson reweighting.', {}, null, negativeGraph),
+                ex('Sparse weighted DAG', 'All-pairs shortest paths on the weighted DAG.', {}, 'weighted_dag')
+            ],
+            'graph/edmonds_karp': [
+                ex('Capacity network', 'BFS augmenting paths from S to T.', { source: 'S', target: 'T' }, null, flowNetwork)
+            ],
+            'graph/dinic': [
+                ex('Level graph flow', 'Blocking flows on the same capacity network.', { source: 'S', target: 'T' }, null, flowNetwork)
+            ],
+            'graph/prim': [
+                ex('City MST', 'Loads weighted city roads and grows an MST from A.', { source: 'A' }, 'city_road_network')
+            ],
+            'graph/kruskal': [
+                ex('City MST', 'Loads weighted city roads for edge-sorted MST construction.', {}, 'city_road_network')
+            ],
+            'graph/topological_sort': [
+                ex('Weighted DAG order', 'Loads a directed acyclic graph for topological sorting.', {}, 'weighted_dag')
+            ],
+            'graph/cycle_detection': [
+                ex('Cycle present', 'Loads a directed graph with two cyclic SCCs.', {}, 'directed_cycle_scc'),
+                ex('Acyclic comparison', 'Loads a DAG so the no-cycle path is visible.', {}, 'weighted_dag')
+            ],
+            'graph/connected_components': [
+                ex('Three components', 'Loads an undirected graph split into three components.', {}, 'disconnected_components')
+            ],
+            'graph/tarjan_scc': [
+                ex('Two SCCs', 'Loads a directed graph with two strong components.', {}, 'directed_cycle_scc')
+            ],
+            'graph/kosaraju_scc': [
+                ex('Two SCCs', 'Runs two DFS passes on the directed SCC graph.', {}, 'directed_cycle_scc')
+            ],
+            'graph/union_find': [
+                ex('Component grouping', 'Loads disconnected components for union-find grouping.', {}, 'disconnected_components'),
+                ex('MST-ready graph', 'Loads weighted city roads for edge unions.', {}, 'city_road_network')
+            ],
+            'graph/bipartite': [
+                ex('Bipartite chains', 'Loads disconnected paths that satisfy bipartite coloring.', {}, 'disconnected_components')
+            ],
+            'graph/floyd_warshall': [
+                ex('All-pairs city paths', 'Loads weighted city roads for all-pairs shortest paths.', {}, 'city_road_network'),
+                ex('DAG all-pairs paths', 'Loads the weighted DAG for directed all-pairs paths.', {}, 'weighted_dag')
+            ],
+            'graph/bridges_articulation': [
+                ex('Chain bridges', 'Loads disconnected chains with clear bridge edges.', {}, 'disconnected_components')
+            ],
+            'array/bubble_sort': [
+                ex('Mixed values', 'Unsorted numeric list with several adjacent swaps.', { values: '5,1,4,2,8' }),
+                ex('Nearly sorted', 'Shows early exit after only a small correction.', { values: '1,2,4,3,5' }),
+                ex('Duplicates', 'Checks stable behavior with repeated values.', { values: '4,2,4,1,2' })
+            ],
+            'array/quick_sort': [
+                ex('Partition demo', 'Classic pivot partitioning example.', { values: '9,3,7,1,8,2,5' }),
+                ex('Reverse ordered', 'Worst-direction input for many pivot choices.', { values: '9,8,7,6,5,4,3' }),
+                ex('Repeated values', 'Shows how equals move around the pivot.', { values: '5,3,5,2,8,5,1' })
+            ],
+            'array/merge_sort': [
+                ex('Balanced splits', 'Even-sized list for divide and merge steps.', { values: '8,3,7,4,9,2,6,5' }),
+                ex('Odd length', 'Shows uneven recursive splitting.', { values: '10,1,9,2,8,3,7' })
+            ],
+            'array/heap_sort': [
+                ex('Heapify demo', 'Builds a max heap with several sift-downs.', { values: '4,10,3,5,1,8,2' }),
+                ex('Sorted tail growth', 'Shows repeated max extraction clearly.', { values: '12,11,13,5,6,7' })
+            ],
+            'array/binary_search': [
+                ex('Found middle', 'Target is present near the center.', { values: '1,2,4,5,8,12,16', target: '8' }),
+                ex('Missing value', 'Target is absent but inside the numeric range.', { values: '1,2,4,5,8,12,16', target: '7' }),
+                ex('Boundary target', 'Target is the first item.', { values: '3,6,9,12,15', target: '3' })
+            ],
+            'dp/lcs': [
+                ex('Simple subsequence', 'Small strings with LCS ace.', { text_a: 'abcde', text_b: 'ace' }),
+                ex('Classic LCS', 'Textbook example with length 4.', { text_a: 'AGGTAB', text_b: 'GXTXAYB' })
+            ],
+            'dp/edit_distance': [
+                ex('Kitten to sitting', 'Classic Levenshtein distance 3.', { text_a: 'kitten', text_b: 'sitting' }),
+                ex('Flaw to lawn', 'Short edit path with substitutions and insertions.', { text_a: 'flaw', text_b: 'lawn' })
+            ],
+            'dp/knapsack': [
+                ex('Small capacity', 'Best value comes from combining item 0 and 1.', { weights: '2,3,4', capacity: '5', values: '3,4,5' }),
+                ex('Budget tradeoff', 'Shows skip/take choices across several capacities.', { weights: '1,3,4,5', capacity: '7', values: '1,4,5,7' })
+            ],
+            'dp/lis': [
+                ex('Classic LIS', 'Expected LIS length is 4.', { values: '10,9,2,5,3,7,101,18' }),
+                ex('Already increasing', 'Every item extends the subsequence.', { values: '1,2,3,4,5,6' }),
+                ex('With drops', 'Several local decreases before the best sequence.', { values: '3,4,-1,0,6,2,3' })
+            ],
+            'dp/coin_change': [
+                ex('Few coins', 'Classic minimum-coin example with amount 11.', { coins: '1,2,5', amount: '11' }),
+                ex('Unreachable gap', 'Shows when a target amount cannot be formed.', { coins: '2,4,6', amount: '7' })
+            ],
+            'dp/matrix_chain_multiplication': [
+                ex('Textbook chain', 'Classic dimensions with optimal cost 15125.', { dimensions: '30,35,15,5,10,20,25' }),
+                ex('Small chain', 'Three matrices with a clear split choice.', { dimensions: '10,30,5,60' })
+            ],
+            'dp/fibonacci_dp': [
+                ex('F(10)', 'Builds the DP table up to 10.', { n: '10' }),
+                ex('F(15)', 'A slightly longer Fibonacci table.', { n: '15' })
+            ],
+            'dp/subset_sum': [
+                ex('Reachable target', 'Finds a subset that sums to 9.', { values: '3,34,4,12,5,2', target: '9' }),
+                ex('Unreachable target', 'Shows a false final cell.', { values: '2,4,6,10', target: '17' })
+            ],
+            'dp/word_break': [
+                ex('Segmentable text', 'Splits the text into dictionary words.', { text: 'leetcode', words: 'leet,code,lee,tcode' }),
+                ex('Multiple words', 'Shows a longer segmentation path.', { text: 'catsanddog', words: 'cat,cats,and,sand,dog' })
+            ],
+            'tree/bst': [
+                ex('Balanced-ish insertions', 'Builds a readable binary search tree.', { values: '50,30,70,20,40,60,80' }),
+                ex('Skewed insertions', 'Shows the worst-case chain shape.', { values: '10,20,30,40,50' })
+            ],
+            'tree/avl': [
+                ex('Rotation sequence', 'Triggers AVL rotations while inserting.', { values: '30,20,10,25,40,50' }),
+                ex('Mixed balance', 'Builds a larger balanced AVL tree.', { values: '10,20,30,40,50,25' })
+            ],
+            'tree/red_black': [
+                ex('Recolor and rotate', 'Triggers common red-black balancing cases.', { values: '10,20,30,15,25,5,1' }),
+                ex('Larger tree', 'More insertions for multiple fix-up passes.', { values: '41,38,31,12,19,8' })
+            ],
+            'tree/btree': [
+                ex('Order 3 splits', 'Small order causes node splits quickly.', { values: '10,20,5,15,25,30,35', order: '3' }),
+                ex('Order 4 wider nodes', 'Shows fewer splits with a wider node.', { values: '8,9,10,11,15,20,17', order: '4' })
+            ],
+            'tree/bplus': [
+                ex('Leaf splits', 'Shows leaf-level splits and linking.', { values: '10,20,5,15,25,30,35', order: '3' }),
+                ex('Range-friendly leaves', 'More keys per internal node.', { values: '3,7,9,12,15,18,21,24', order: '4' })
+            ],
+            'tree/heap': [
+                ex('Max heap', 'Builds a max heap by sift-up.', { values: '4,10,3,5,1,8,2', type: 'max' }),
+                ex('Min heap', 'Builds a min heap from the same values.', { values: '4,10,3,5,1,8,2', type: 'min' })
+            ],
+            'tree/fenwick_tree': [
+                ex('Prefix sum', 'Builds BIT and queries prefix sum through index 5.', { values: '1,7,3,0,7,8,3,2,6,2', query_index: '5' }),
+                ex('Short updates', 'Small array with a clear query path.', { values: '2,4,5,7', query_index: '3' })
+            ],
+            'tree/trie': [
+                ex('Shared prefixes', 'Words share app/ap and ba prefixes.', { words: 'apple,app,apt,bat,bar' }),
+                ex('Lookup-style words', 'Compact vocabulary with overlapping starts.', { words: 'cat,car,cart,dog,dot' })
+            ],
+            'tree/aho_corasick': [
+                ex('Classic multi-match', 'Patterns overlap inside the text.', { patterns: 'he,she,his,hers', text: 'ushers' }),
+                ex('Short word scan', 'Several words appear in a compact sentence.', { patterns: 'cat,car,cart', text: 'thecartandcat' })
+            ],
+            'tree/huffman': [
+                ex('Frequency contrast', 'Classic Huffman coding example.', { text: 'aaabbc' }),
+                ex('Sentence sample', 'More characters with varied frequencies.', { text: 'visual algorithm lab' })
+            ],
+            'tree/tree_bfs': [
+                ex('Binary tree from root', 'Loads the balanced tree and starts at A.', { source: 'A' }, 'binary_tree'),
+                ex('Large tree traversal', 'Loads the 15-node tree and starts at N1.', { source: 'N1' }, 'large_tree')
+            ],
+            'tree/tree_dfs': [
+                ex('Binary tree DFS', 'Loads the balanced tree and starts at A.', { source: 'A' }, 'binary_tree'),
+                ex('Unbalanced DFS', 'Loads a skewed tree for deep traversal.', { source: 'A' }, 'unbalanced_tree')
+            ],
+            'tree/level_order': [
+                ex('Balanced levels', 'Loads the balanced tree and visits level by level.', { source: 'A' }, 'binary_tree'),
+                ex('Large levels', 'Loads a 15-node binary tree for multiple levels.', { source: 'N1' }, 'large_tree')
+            ],
+            'string/kmp': [
+                ex('Classic pattern', 'Searches for a repeated substring in a short text.', { text: 'abxabcabcaby', pattern: 'abcaby' }),
+                ex('Multiple matches', 'Pattern appears more than once.', { text: 'aaaaa', pattern: 'aaa' })
+            ],
+            'string/rabin_karp': [
+                ex('Rolling hash search', 'Verifies a hash hit before confirming the match.', { text: 'ababcabcabababd', pattern: 'ababd' }),
+                ex('Collision check', 'Shows repeated hash rolling across a short string.', { text: 'aaaaab', pattern: 'aaab' })
+            ],
+            'string/boyer_moore': [
+                ex('Right-to-left compare', 'Highlights the bad-character shift rule.', { text: 'HERE IS A SIMPLE EXAMPLE', pattern: 'EXAMPLE' }),
+                ex('Compact scan', 'A shorter text with one clear match.', { text: 'FIND IN A HAYSTACK', pattern: 'HAY' })
+            ],
+            'string/z_algorithm': [
+                ex('Prefix overlap', 'Builds the Z array on a repeated prefix text.', { text: 'aabxaabxcaabxaabxay', pattern: 'aabxa' }),
+                ex('Linear search', 'Finds all matches by scanning the combined string.', { text: 'aaaaa', pattern: 'aaa' })
+            ],
+            'string/manacher': [
+                ex('Odd palindrome', 'Finds bab or aba as the longest palindrome.', { text: 'babad' }),
+                ex('Even palindrome', 'Finds the even-length palindrome bb.', { text: 'cbbd' })
+            ],
+            'array/kadane': [
+                ex('Profit window', 'Classic maximum subarray example.', { values: '-2,1,-3,4,-1,2,1,-5,4' }),
+                ex('All negative', 'Returns the largest single element.', { values: '-8,-3,-6,-2,-5,-4' })
+            ]
+        };
     }
 
     _renderEduPanel(algo) {
@@ -280,7 +1322,10 @@ class AlgorithmPanel {
     }
 
     _validateParams() {
+        this._clearParamErrors();
+
         if (!this.selectedAlgorithm) {
+            this._showParamError('Please select an algorithm first');
             showToast('Please select an algorithm first', 'error');
             return false;
         }
@@ -291,6 +1336,8 @@ class AlgorithmPanel {
         const params = this._collectParams();
         for (const param of (algo.parameters || [])) {
             if (param.required && !params[param.name]) {
+                const message = `Parameter '${param.name}' is required`;
+                this._showParamError(message, [param.name]);
                 showToast(`Parameter '${param.description || param.name}' is required`, 'error');
                 const el = document.getElementById(`param-${param.name}`);
                 if (el) el.focus();
@@ -305,6 +1352,7 @@ class AlgorithmPanel {
         const buildsStructure = algo_meta && (algo_meta.builds_structure || algo_meta.requires_graph === false);
         if (!graph.nodes || graph.nodes.length === 0) {
             if (!buildsStructure) {
+                this._showParamError('Graph has no nodes');
                 showToast('Graph has no nodes', 'error');
                 return false;
             }
@@ -338,6 +1386,159 @@ class AlgorithmPanel {
         });
     }
 
+    _setupTimelineControls() {
+        const startBtn = document.getElementById('btn-timeline-start');
+        const prevBtn = document.getElementById('btn-timeline-prev');
+        const playBtn = document.getElementById('btn-timeline-play');
+        const nextBtn = document.getElementById('btn-timeline-next');
+        const endBtn = document.getElementById('btn-timeline-end');
+        const slider = document.getElementById('timeline-slider');
+        const exportBtn = document.getElementById('btn-export-run');
+
+        if (!startBtn || !prevBtn || !playBtn || !nextBtn || !endBtn || !slider) return;
+
+        startBtn.addEventListener('click', () => this._renderTimelineIndex(0));
+        prevBtn.addEventListener('click', () => this._renderTimelineIndex(this.timeline.currentIndex - 1));
+        nextBtn.addEventListener('click', () => this._renderTimelineIndex(this.timeline.currentIndex + 1));
+        endBtn.addEventListener('click', () => this._renderTimelineIndex(this.timeline.steps.length));
+
+        playBtn.addEventListener('click', () => {
+            if (this.timeline.playbackActive) {
+                this._stopTimelinePlayback();
+            } else {
+                this._startTimelinePlayback();
+            }
+        });
+
+        slider.addEventListener('input', (e) => {
+            this._stopTimelinePlayback();
+            this._renderTimelineIndex(parseInt(e.target.value, 10));
+        });
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this._exportRun());
+        }
+
+        this._syncTimelineUI();
+    }
+
+    loadRunRecord(record) {
+        const normalized = this._normalizeRunRecord(record);
+        if (!normalized) {
+            showToast('Invalid run record', 'error');
+            return false;
+        }
+
+        const { algorithmKey, params, baseGraph, steps, startedAt, finishedAt, visualization, runMetrics } = normalized;
+        const algo = this.algorithms.find(a => `${a.category}/${a.name}` === algorithmKey) || null;
+
+        this._stopTimelinePlayback();
+        this.isRunning = false;
+        this.isPaused = false;
+        this._pendingStepPause = false;
+
+        this.searchQuery = '';
+        const searchInput = document.getElementById('algorithm-search');
+        if (searchInput) searchInput.value = '';
+        this.categoryCollapsed.clear();
+        this._renderAlgorithmCards();
+
+        if (algo) {
+            const card = document.querySelector(`.algo-card[data-key="${algorithmKey}"]`);
+            if (card) this._selectAlgorithm(algo, card);
+        } else if (visualization) {
+            this.selectedAlgorithm = algorithmKey;
+            this.selectedVisualization = visualization;
+            if (this.visualizer && this.visualizer.setVisualizationMode) {
+                this.visualizer.setVisualizationMode(visualization);
+            }
+            if (visualization === 'graph' && this.editor && this.editor.setStructureType) {
+                if (baseGraph.directed && baseGraph.root_id) {
+                    this.editor.setStructureType('tree');
+                } else {
+                    this.editor.setStructureType('graph');
+                }
+            }
+        }
+
+        this.timeline.baseGraph = JSON.parse(JSON.stringify(baseGraph));
+        this.timeline.algorithmKey = algorithmKey;
+        this.timeline.params = JSON.parse(JSON.stringify(params));
+        this.timeline.startedAt = startedAt || null;
+        this.timeline.finishedAt = finishedAt || null;
+        this.timeline.steps = JSON.parse(JSON.stringify(steps));
+        this.timeline.currentIndex = this.timeline.steps.length;
+        this.timeline.completed = true;
+        this.timeline.playbackTimer = null;
+        this.timeline.playbackActive = false;
+        this.runMetrics = runMetrics || this._computeRunMetrics(this.timeline.steps);
+
+        this.editor.restoreSnapshot(this.timeline.baseGraph, { save: false });
+        this.visualizer.storeOriginalLabels();
+        this.editor.setMode('view');
+
+        const paramEntries = Object.entries(params || {});
+        paramEntries.forEach(([name, value]) => {
+            const el = document.getElementById(`param-${name}`);
+            if (el) {
+                el.value = value;
+                el.dispatchEvent(new Event('change'));
+            }
+        });
+
+        const log = document.getElementById('step-log-content');
+        if (log) log.innerHTML = '';
+        this.timeline.steps.forEach((step, index) => {
+            if (step && step.message) {
+                this._appendToLog(step.message, step.phase || 'explore', index);
+            }
+        });
+
+        if (this.timeline.steps.length > 0) {
+            this._renderTimelineIndex(this.timeline.steps.length);
+        } else {
+            this._clearState();
+            this._syncTimelineUI();
+        }
+        this._renderRunSummary();
+
+        this._setStatus('replay', 'Imported');
+        showToast('Run record imported', 'success');
+        return true;
+    }
+
+    _normalizeRunRecord(record) {
+        if (!record || typeof record !== 'object') return null;
+
+        const algorithmKey = record.algorithm_key || record.algorithmKey;
+        const baseGraph = record.base_graph || record.baseGraph;
+        const steps = record.steps || record.timeline || [];
+        const params = record.params || {};
+        const startedAt = record.started_at || record.startedAt || null;
+        const finishedAt = record.finished_at || record.finishedAt || null;
+        const visualization = record.visualization || record.visualization_mode || null;
+        const runMetrics = record.run_metrics || record.runMetrics || null;
+
+        if (!algorithmKey || !baseGraph || !Array.isArray(steps) || steps.length === 0) {
+            return null;
+        }
+
+        return {
+            algorithmKey,
+            baseGraph,
+            params,
+            steps,
+            startedAt,
+            finishedAt,
+            visualization,
+            runMetrics
+        };
+    }
+
+    _findAlgorithmByKey(key) {
+        return this.algorithms.find(a => `${a.category}/${a.name}` === key) || null;
+    }
+
     _play() {
         if (!this._validateParams()) return;
 
@@ -351,6 +1552,8 @@ class AlgorithmPanel {
 
         const graph = this.editor.toJSON();
         const params = this._collectParams();
+
+        this._startTimelineCapture(graph, this.selectedAlgorithm, params);
 
         // Store original labels before run
         this.visualizer.storeOriginalLabels();
@@ -370,6 +1573,8 @@ class AlgorithmPanel {
 
         document.getElementById('step-log-content').innerHTML = '';
         this._clearState();
+        this._clearParamErrors();
+        this._syncTimelineUI();
     }
 
     _pause() {
@@ -388,6 +1593,7 @@ class AlgorithmPanel {
             // First step: send 'start' command so backend creates the runner
             const graph = this.editor.toJSON();
             const params = this._collectParams();
+            this._startTimelineCapture(graph, this.selectedAlgorithm, params);
             this.visualizer.storeOriginalLabels();
 
             this.ws.send('start', {
@@ -404,6 +1610,8 @@ class AlgorithmPanel {
             this._setStatus('running', 'Running');
             document.getElementById('step-log-content').innerHTML = '';
             this._clearState();
+            this._clearParamErrors();
+            this._syncTimelineUI();
 
             // After start, immediately pause so we only get one step
             // We'll pause after the first step arrives
@@ -417,12 +1625,27 @@ class AlgorithmPanel {
 
     _reset() {
         this.ws.send('reset');
+        const baseGraph = this.timeline.baseGraph
+            ? JSON.parse(JSON.stringify(this.timeline.baseGraph))
+            : null;
         this.isRunning = false;
         this.isPaused = false;
         this._pendingStepPause = false;
+        this._clearTimeline();
+        if (this.visualizer && this.visualizer.setVisualizationMode) {
+            this.visualizer.setVisualizationMode(this.selectedVisualization || 'graph');
+            if (this.selectedVisualization !== 'graph' && this.visualizer.clearStructure) {
+                this.visualizer.clearStructure();
+            }
+        }
         this.editor.setMode('edit');
-        this.editor.resetAllStyles();
-        this.visualizer.restoreOriginalLabels();
+        if (baseGraph) {
+            this.editor.restoreSnapshot(baseGraph, { save: false });
+            this.visualizer.storeOriginalLabels();
+        } else {
+            this.editor.resetAllStyles();
+            this.visualizer.restoreOriginalLabels();
+        }
 
         // Restore layout mode based on current structure type
         if (this.editor.getStructureType() === 'tree') {
@@ -440,6 +1663,7 @@ class AlgorithmPanel {
         this._updateButtonStates();
         document.getElementById('step-log-content').innerHTML = '';
         this._clearState();
+        this._clearParamErrors();
     }
 
     _setStatus(className, text) {
@@ -456,13 +1680,18 @@ class AlgorithmPanel {
 
     _setupWSHandlers() {
         this.ws.on('step', (data) => {
+            this.timeline.steps.push(data);
+            this.timeline.currentIndex = this.timeline.steps.length;
+            this._updateRunMetrics();
+            this._syncTimelineUI();
             this.visualizer.applyStep(data);
             if (data.message) {
-                this._appendToLog(data.message, data.phase || 'explore');
+                this._appendToLog(data.message, data.phase || 'explore', this.timeline.steps.length - 1);
             }
             if (data.state) {
                 this._renderState(data.state);
             }
+            this._highlightTimelineLog(this.timeline.steps.length - 1);
             // If we started via step button, pause after first step
             if (this._pendingStepPause) {
                 this._pendingStepPause = false;
@@ -484,9 +1713,15 @@ class AlgorithmPanel {
             this.isRunning = false;
             this.isPaused = false;
             this._pendingStepPause = false;
+            this.timeline.completed = true;
+            this.timeline.finishedAt = new Date().toISOString();
+            this.timeline.currentIndex = this.timeline.steps.length;
+            this._updateRunMetrics();
+            this._stopTimelinePlayback();
             this.editor.setMode('view');
             this._setStatus('finished', 'Finished');
             this._updateButtonStates();
+            this._syncTimelineUI();
             this._appendToLog('Algorithm completed!', 'result');
             showToast('Algorithm finished!', 'success');
             // Re-enable layout for tree algorithms, then fit
@@ -500,26 +1735,320 @@ class AlgorithmPanel {
             this.isPaused = true;
             this._setStatus('paused', 'Paused');
             this._updateButtonStates();
+            this._syncTimelineUI();
         });
 
         this.ws.on('reset_done', () => {
             this.isRunning = false;
             this.isPaused = false;
+            this._clearTimeline();
             this.editor.setMode('edit');
             this._setStatus('', 'Ready');
             this._updateButtonStates();
             this._clearState();
+            this._clearParamErrors();
         });
 
         this.ws.on('error', (data) => {
-            showToast(data.message || 'Algorithm error', 'error');
-            this._appendToLog(`Error: ${data.message}`, 'result');
+            const message = data.message || 'Algorithm error';
+            this._showParamError(message, this._inferErrorFields(message));
+            showToast(message, 'error');
+            this._appendToLog(`Error: ${message}`, 'result');
             this.isRunning = false;
             this.isPaused = false;
             this._pendingStepPause = false;
+            this.timeline.completed = false;
+            this._stopTimelinePlayback();
             this._setStatus('', 'Error');
             this._updateButtonStates();
+            this._updateRunMetrics();
+            this._syncTimelineUI();
         });
+    }
+
+    _startTimelineCapture(baseGraph, algorithmKey, params) {
+        this._stopTimelinePlayback();
+        this.timeline.baseGraph = JSON.parse(JSON.stringify(baseGraph));
+        this.timeline.algorithmKey = algorithmKey || this.selectedAlgorithm;
+        this.timeline.params = JSON.parse(JSON.stringify(params || {}));
+        this.timeline.startedAt = new Date().toISOString();
+        this.timeline.finishedAt = null;
+        this.timeline.steps = [];
+        this.timeline.currentIndex = 0;
+        this.timeline.completed = false;
+        this.runMetrics = this._createEmptyRunMetrics();
+        this._highlightTimelineLog(-1);
+        this._renderRunSummary();
+        this._syncTimelineUI();
+    }
+
+    _clearTimeline() {
+        this._stopTimelinePlayback();
+        this.timeline.baseGraph = null;
+        this.timeline.algorithmKey = null;
+        this.timeline.params = {};
+        this.timeline.startedAt = null;
+        this.timeline.finishedAt = null;
+        this.timeline.steps = [];
+        this.timeline.currentIndex = 0;
+        this.timeline.completed = false;
+        this.runMetrics = this._createEmptyRunMetrics();
+        this._highlightTimelineLog(-1);
+        this._clearRunSummary();
+        this._syncTimelineUI();
+    }
+
+    _createEmptyRunMetrics() {
+        return {
+            step_count: 0,
+            duration_ms: null,
+            visited_node_count: 0,
+            touched_edge_count: 0,
+            message_count: 0,
+            phase_counts: {},
+            action_counts: {}
+        };
+    }
+
+    _computeRunMetrics(steps = this.timeline.steps) {
+        const metrics = this._createEmptyRunMetrics();
+        const visitedNodes = new Set();
+        const touchedEdges = new Set();
+
+        (steps || []).forEach(step => {
+            if (!step) return;
+            metrics.step_count += 1;
+            if (step.message) metrics.message_count += 1;
+
+            const phase = step.phase || 'unknown';
+            const action = step.action || 'unknown';
+            metrics.phase_counts[phase] = (metrics.phase_counts[phase] || 0) + 1;
+            metrics.action_counts[action] = (metrics.action_counts[action] || 0) + 1;
+
+            if (step.target_type === 'node' && step.target_id) {
+                visitedNodes.add(String(step.target_id));
+            }
+            if (step.target_type === 'edge' && step.target_id) {
+                touchedEdges.add(String(step.target_id));
+            }
+        });
+
+        metrics.visited_node_count = visitedNodes.size;
+        metrics.touched_edge_count = touchedEdges.size;
+
+        if (this.timeline.startedAt && this.timeline.finishedAt) {
+            const start = Date.parse(this.timeline.startedAt);
+            const finish = Date.parse(this.timeline.finishedAt);
+            if (!Number.isNaN(start) && !Number.isNaN(finish) && finish >= start) {
+                metrics.duration_ms = finish - start;
+            }
+        }
+
+        return metrics;
+    }
+
+    _updateRunMetrics() {
+        this.runMetrics = this._computeRunMetrics();
+        this._renderRunSummary();
+    }
+
+    _renderRunSummary() {
+        const panel = document.getElementById('run-summary');
+        const content = document.getElementById('run-summary-content');
+        if (!panel || !content) return;
+
+        const metrics = this.runMetrics || this._createEmptyRunMetrics();
+        if (!metrics.step_count && !this.isRunning && !this.timeline.completed) {
+            this._clearRunSummary();
+            return;
+        }
+
+        content.innerHTML = '';
+        const items = [
+            ['Steps', metrics.step_count],
+            ['Nodes', metrics.visited_node_count],
+            ['Edges', metrics.touched_edge_count],
+            ['Messages', metrics.message_count]
+        ];
+        if (metrics.duration_ms !== null && metrics.duration_ms !== undefined) {
+            items.push(['Duration', `${metrics.duration_ms}ms`]);
+        }
+
+        items.forEach(([label, value]) => {
+            const item = document.createElement('div');
+            item.className = 'run-metric';
+
+            const labelEl = document.createElement('span');
+            labelEl.className = 'run-metric-label';
+            labelEl.textContent = label;
+
+            const valueEl = document.createElement('span');
+            valueEl.className = 'run-metric-value';
+            valueEl.textContent = this._formatStateValue(value);
+
+            item.appendChild(labelEl);
+            item.appendChild(valueEl);
+            content.appendChild(item);
+        });
+
+        panel.style.display = 'flex';
+    }
+
+    _clearRunSummary() {
+        const panel = document.getElementById('run-summary');
+        const content = document.getElementById('run-summary-content');
+        if (content) content.innerHTML = '';
+        if (panel) panel.style.display = 'none';
+    }
+
+    _timelineCanReview() {
+        return this.timeline.completed && this.timeline.steps.length > 0;
+    }
+
+    _syncTimelineUI() {
+        const slider = document.getElementById('timeline-slider');
+        const label = document.getElementById('timeline-label');
+        const playIcon = document.getElementById('timeline-play-icon');
+        const exportBtn = document.getElementById('btn-export-run');
+        const ids = [
+            'btn-timeline-start',
+            'btn-timeline-prev',
+            'btn-timeline-play',
+            'btn-timeline-next',
+            'btn-timeline-end'
+        ];
+
+        const total = this.timeline.steps.length;
+        const current = Math.max(0, Math.min(this.timeline.currentIndex, total));
+        const canReview = this._timelineCanReview();
+
+        if (slider) {
+            slider.max = String(total);
+            slider.value = String(current);
+            slider.disabled = !canReview;
+        }
+        if (label) label.textContent = `${current} / ${total}`;
+        if (playIcon) playIcon.textContent = this.timeline.playbackActive ? '⏸️' : '▶️';
+
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.disabled = !canReview;
+        });
+
+        if (exportBtn) exportBtn.disabled = !canReview;
+
+        const startBtn = document.getElementById('btn-timeline-start');
+        const prevBtn = document.getElementById('btn-timeline-prev');
+        const nextBtn = document.getElementById('btn-timeline-next');
+        const endBtn = document.getElementById('btn-timeline-end');
+        if (canReview) {
+            if (startBtn) startBtn.disabled = current <= 0;
+            if (prevBtn) prevBtn.disabled = current <= 0;
+            if (nextBtn) nextBtn.disabled = current >= total;
+            if (endBtn) endBtn.disabled = current >= total;
+        }
+    }
+
+    _exportRun() {
+        if (!this._timelineCanReview()) {
+            showToast('Run export is available after an algorithm completes', 'error');
+            return;
+        }
+
+        const steps = this.timeline.steps.map(step => JSON.parse(JSON.stringify(step)));
+        const finalStep = steps.length ? steps[steps.length - 1] : null;
+        const algo = this._findAlgorithmByKey(this.selectedAlgorithm);
+        const payload = {
+            schema: 'visual-algorithm-run-v1',
+            exported_at: new Date().toISOString(),
+            algorithm_key: this.timeline.algorithmKey || this.selectedAlgorithm,
+            visualization: this.selectedVisualization || (algo && algo.visualization) || 'graph',
+            params: JSON.parse(JSON.stringify(this.timeline.params || {})),
+            started_at: this.timeline.startedAt,
+            finished_at: this.timeline.finishedAt,
+            base_graph: JSON.parse(JSON.stringify(this.timeline.baseGraph || {})),
+            step_count: steps.length,
+            run_metrics: JSON.parse(JSON.stringify(this.runMetrics || this._computeRunMetrics(steps))),
+            final_state: finalStep ? (finalStep.state || null) : null,
+            steps
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeKey = String(payload.algorithm_key || 'algorithm').replace(/[^a-z0-9_-]+/gi, '-');
+        link.href = url;
+        link.download = `${safeKey}-run-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showToast('Run exported', 'success');
+    }
+
+    _renderTimelineIndex(index) {
+        if (!this._timelineCanReview() || !this.timeline.baseGraph) return;
+
+        const bounded = Math.max(0, Math.min(index, this.timeline.steps.length));
+        this.timeline.currentIndex = bounded;
+
+        this.editor.restoreSnapshot(this.timeline.baseGraph, { save: false });
+        this.visualizer.storeOriginalLabels();
+
+        for (let i = 0; i < bounded; i++) {
+            this.visualizer.applyStep(this.timeline.steps[i]);
+        }
+
+        const currentStep = bounded > 0 ? this.timeline.steps[bounded - 1] : null;
+        if (currentStep && currentStep.state) {
+            this._renderState(currentStep.state);
+        } else {
+            this._clearState();
+        }
+
+        this.editor.setMode('view');
+        this._setStatus('replay', bounded === this.timeline.steps.length ? 'Replay End' : 'Replaying');
+        this._highlightTimelineLog(bounded - 1);
+        this._syncTimelineUI();
+    }
+
+    _startTimelinePlayback() {
+        if (!this._timelineCanReview()) return;
+
+        if (this.timeline.currentIndex >= this.timeline.steps.length) {
+            this._renderTimelineIndex(0);
+        }
+
+        this.timeline.playbackActive = true;
+        this._syncTimelineUI();
+
+        this.timeline.playbackTimer = setInterval(() => {
+            if (this.timeline.currentIndex >= this.timeline.steps.length) {
+                this._stopTimelinePlayback();
+                return;
+            }
+            this._renderTimelineIndex(this.timeline.currentIndex + 1);
+        }, Math.max(50, this.currentSpeed));
+    }
+
+    _stopTimelinePlayback() {
+        if (this.timeline.playbackTimer) {
+            clearInterval(this.timeline.playbackTimer);
+            this.timeline.playbackTimer = null;
+        }
+        this.timeline.playbackActive = false;
+        this._syncTimelineUI();
+    }
+
+    _highlightTimelineLog(stepIndex) {
+        document.querySelectorAll('.log-entry.active').forEach(el => el.classList.remove('active'));
+        if (stepIndex < 0) return;
+        const el = document.querySelector(`.log-entry[data-step-index="${stepIndex}"]`);
+        if (el) {
+            el.classList.add('active');
+            el.scrollIntoView({ block: 'nearest' });
+        }
     }
 
     _renderState(state) {
@@ -529,26 +2058,273 @@ class AlgorithmPanel {
 
         content.innerHTML = '';
         Object.entries(state).forEach(([key, value]) => {
-            const row = document.createElement('div');
-            row.className = 'state-row';
+            const section = document.createElement('div');
+            section.className = 'state-section';
 
             const label = document.createElement('div');
-            label.className = 'state-key';
-            label.textContent = key;
+            label.className = 'state-section-title';
+            label.textContent = this._formatStateKey(key);
 
-            const valueEl = document.createElement('div');
-            valueEl.className = 'state-value';
-            valueEl.textContent = this._formatStateValue(value);
-
-            row.appendChild(label);
-            row.appendChild(valueEl);
-            content.appendChild(row);
+            section.appendChild(label);
+            section.appendChild(this._renderStateValue(key, value, 0));
+            content.appendChild(section);
         });
 
         panel.style.display = 'flex';
     }
 
+    _renderStateValue(key, value, depth = 0) {
+        if (value && typeof value === 'object' && value.type === 'matrix') {
+            return this._renderMatrix(value);
+        }
+
+        if (Array.isArray(value)) {
+            if (value.length === 0) return this._renderEmptyState();
+            if (value.every(item => Array.isArray(item))) {
+                return key.includes('component') ? this._renderGroups(value) : this._renderSimpleMatrix(value);
+            }
+            if (value.every(item => this._isPrimitive(item))) {
+                return this._renderChips(value);
+            }
+            if (value.every(item => item && typeof item === 'object' && !Array.isArray(item))) {
+                return this._renderObjectTable(value);
+            }
+            return this._renderPre(value);
+        }
+
+        if (value && typeof value === 'object') {
+            return this._renderKeyValueList(value, depth);
+        }
+
+        const scalar = document.createElement('div');
+        scalar.className = 'state-scalar';
+        scalar.textContent = this._formatStateValue(value);
+        return scalar;
+    }
+
+    _renderChips(items) {
+        const wrap = document.createElement('div');
+        wrap.className = 'state-chip-row';
+
+        items.forEach(item => {
+            const chip = document.createElement('span');
+            chip.className = 'state-chip';
+            chip.textContent = this._formatStateValue(item);
+            wrap.appendChild(chip);
+        });
+
+        return wrap;
+    }
+
+    _renderGroups(groups) {
+        const wrap = document.createElement('div');
+        wrap.className = 'state-group-list';
+
+        groups.forEach((group, idx) => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'state-group';
+
+            const name = document.createElement('span');
+            name.className = 'state-group-name';
+            name.textContent = `#${idx + 1}`;
+
+            groupEl.appendChild(name);
+            groupEl.appendChild(this._renderChips(group));
+            wrap.appendChild(groupEl);
+        });
+
+        return wrap;
+    }
+
+    _renderKeyValueList(obj, depth = 0) {
+        const wrap = document.createElement('div');
+        wrap.className = depth > 0 ? 'state-kv-list nested' : 'state-kv-list';
+
+        Object.entries(obj).forEach(([key, value]) => {
+            const row = document.createElement('div');
+            row.className = 'state-row';
+
+            const keyEl = document.createElement('span');
+            keyEl.className = 'state-key';
+            keyEl.textContent = this._formatStateKey(key);
+
+            const valueEl = document.createElement('div');
+            valueEl.className = 'state-value';
+            valueEl.appendChild(this._renderNestedStateValue(key, value, depth + 1));
+
+            row.appendChild(keyEl);
+            row.appendChild(valueEl);
+            wrap.appendChild(row);
+        });
+
+        return wrap;
+    }
+
+    _renderNestedStateValue(key, value, depth) {
+        if (this._isPrimitive(value)) {
+            const scalar = document.createElement('span');
+            scalar.className = 'state-inline-scalar';
+            scalar.textContent = this._formatStateValue(value);
+            return scalar;
+        }
+
+        if (Array.isArray(value)) {
+            if (value.length === 0) return this._renderEmptyState();
+            if (value.every(item => this._isPrimitive(item))) {
+                return this._renderChips(value);
+            }
+            if (value.every(item => item && typeof item === 'object' && !Array.isArray(item))) {
+                return depth > 1 ? this._renderInlineObjectValue(value) : this._renderObjectTable(value);
+            }
+            return this._renderPre(value);
+        }
+
+        if (value && typeof value === 'object') {
+            if (value.type === 'matrix') return this._renderMatrix(value);
+            if (depth >= 3 || this._objectHasOnlyPrimitiveValues(value)) {
+                return this._renderInlineObjectValue(value);
+            }
+            return this._renderKeyValueList(value, depth);
+        }
+
+        const scalar = document.createElement('span');
+        scalar.className = 'state-inline-scalar';
+        scalar.textContent = this._formatStateValue(value);
+        return scalar;
+    }
+
+    _renderInlineObjectValue(value) {
+        const span = document.createElement('span');
+        span.className = 'state-inline-object';
+        span.textContent = this._formatInlineStateValue(value);
+        span.title = span.textContent;
+        return span;
+    }
+
+    _renderObjectTable(items) {
+        const columns = [...new Set(items.flatMap(item => Object.keys(item)))];
+        const table = document.createElement('table');
+        table.className = 'state-table';
+
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        items.forEach(item => {
+            const row = document.createElement('tr');
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                const cellValue = item[col];
+                if (this._isPrimitive(cellValue)) {
+                    td.textContent = this._formatStateValue(cellValue);
+                } else {
+                    td.appendChild(this._renderInlineObjectValue(cellValue));
+                }
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        return table;
+    }
+
+    _renderMatrix(matrix) {
+        const rows = matrix.rows || [];
+        const columns = matrix.columns || [];
+        const values = matrix.values || [];
+        const table = document.createElement('table');
+        table.className = 'state-table state-matrix';
+
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        headRow.appendChild(document.createElement('th'));
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        values.forEach((rowValues, rowIdx) => {
+            const tr = document.createElement('tr');
+            const rowHead = document.createElement('th');
+            rowHead.textContent = rows[rowIdx] || rowIdx;
+            tr.appendChild(rowHead);
+
+            rowValues.forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = this._formatStateValue(value);
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        return table;
+    }
+
+    _renderSimpleMatrix(values) {
+        return this._renderMatrix({
+            type: 'matrix',
+            rows: values.map((_, idx) => idx),
+            columns: values[0] ? values[0].map((_, idx) => idx) : [],
+            values
+        });
+    }
+
+    _renderPre(value) {
+        const pre = document.createElement('pre');
+        pre.className = 'state-pre';
+        pre.textContent = JSON.stringify(value, null, 2);
+        return pre;
+    }
+
+    _renderEmptyState() {
+        const empty = document.createElement('div');
+        empty.className = 'state-empty';
+        empty.textContent = 'empty';
+        return empty;
+    }
+
+    _isPrimitive(value) {
+        return value === null || ['string', 'number', 'boolean'].includes(typeof value);
+    }
+
+    _objectHasOnlyPrimitiveValues(obj) {
+        return Object.values(obj).every(value => this._isPrimitive(value));
+    }
+
+    _formatStateKey(key) {
+        return String(key).replace(/_/g, ' ');
+    }
+
+    _formatInlineStateValue(value) {
+        if (this._isPrimitive(value)) return this._formatStateValue(value);
+        if (Array.isArray(value)) {
+            return `[${value.map(item => this._formatInlineStateValue(item)).join(', ')}]`;
+        }
+        if (value && typeof value === 'object') {
+            return Object.entries(value)
+                .map(([key, item]) => `${this._formatStateKey(key)}: ${this._formatInlineStateValue(item)}`)
+                .join(', ');
+        }
+        return this._formatStateValue(value);
+    }
+
     _formatStateValue(value) {
+        if (value === null || value === undefined) return 'null';
+        if (value === Infinity || value === 'Infinity') return '∞';
+        if (value === -Infinity || value === '-Infinity') return '-∞';
         if (Array.isArray(value)) {
             if (value.length === 0) return '[]';
             if (value.every(v => typeof v !== 'object')) {
@@ -569,10 +2345,13 @@ class AlgorithmPanel {
         if (panel) panel.style.display = 'none';
     }
 
-    _appendToLog(message, phase) {
+    _appendToLog(message, phase, stepIndex = null) {
         const log = document.getElementById('step-log-content');
         const entry = document.createElement('div');
         entry.className = 'log-entry';
+        if (stepIndex !== null && stepIndex !== undefined) {
+            entry.dataset.stepIndex = String(stepIndex);
+        }
 
         const phaseSpan = document.createElement('span');
         phaseSpan.className = `log-phase ${phase}`;

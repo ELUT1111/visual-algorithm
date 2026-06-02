@@ -6,7 +6,7 @@
     <title>Visual Algorithm Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="stylesheet" href="/static/css/style.css?v=11">
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
@@ -24,6 +24,13 @@
             <!-- Algorithm Selector -->
             <section class="sidebar-section" id="algorithm-section">
                 <h3><span class="emoji-icon">📋</span> Algorithms</h3>
+                <div id="algorithm-overview" class="algorithm-overview" aria-label="Algorithm library overview"></div>
+                <div id="learning-paths" class="learning-paths" aria-label="Learning paths"></div>
+                <div id="algorithm-quick-access" class="algorithm-quick-access" aria-label="Favorite and recent algorithms"></div>
+                <div class="algorithm-toolbar">
+                    <input id="algorithm-search" type="search" placeholder="Search algorithms" autocomplete="off">
+                    <button class="btn btn-icon" id="btn-clear-algo-search" type="button" title="Clear search">✕</button>
+                </div>
                 <div id="algorithm-list"></div>
             </section>
 
@@ -64,6 +71,40 @@
                     <button class="btn btn-sm" id="btn-import"><span class="emoji-icon">📥</span> Import JSON</button>
                     <button class="btn btn-sm" id="btn-export"><span class="emoji-icon">📤</span> Export JSON</button>
                 </div>
+                <div id="graph-generator">
+                    <div class="preset-group-label">Graph Generator</div>
+                    <div class="generator-grid">
+                        <label>
+                            Type
+                            <select id="generator-type">
+                                <option value="random">Random</option>
+                                <option value="connected">Connected</option>
+                                <option value="dag">DAG</option>
+                                <option value="bipartite">Bipartite</option>
+                                <option value="grid">Grid</option>
+                                <option value="negative">Negative Weights</option>
+                                <option value="disconnected">Disconnected</option>
+                            </select>
+                        </label>
+                        <label>
+                            Nodes
+                            <input id="generator-nodes" type="number" min="4" max="40" value="10">
+                        </label>
+                        <label>
+                            Density
+                            <select id="generator-density">
+                                <option value="0.25">Sparse</option>
+                                <option value="0.45" selected>Medium</option>
+                                <option value="0.7">Dense</option>
+                            </select>
+                        </label>
+                        <label class="generator-check">
+                            <input id="generator-weighted" type="checkbox" checked>
+                            Weighted
+                        </label>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="btn-generate-graph"><span class="emoji-icon">🎲</span> Generate Graph</button>
+                </div>
             </section>
 
             <!-- Custom Algorithm -->
@@ -79,6 +120,9 @@
         <main id="main-content">
             <!-- Graph Visualization -->
             <div id="graph-container"></div>
+            <div id="structure-container" style="display:none;">
+                <div id="structure-view"></div>
+            </div>
 
             <!-- Resize Handle -->
             <div id="panel-resize-handle" title="Drag to resize">
@@ -119,6 +163,24 @@
                     </div>
                 </div>
 
+                <!-- Timeline -->
+                <div id="timeline-bar">
+                    <button class="btn btn-timeline" id="btn-timeline-start" title="Jump to start" disabled><span>⏮️</span></button>
+                    <button class="btn btn-timeline" id="btn-timeline-prev" title="Previous step" disabled><span>◀️</span></button>
+                    <button class="btn btn-timeline" id="btn-timeline-play" title="Replay timeline" disabled><span id="timeline-play-icon">▶️</span></button>
+                    <button class="btn btn-timeline" id="btn-timeline-next" title="Next step" disabled><span>▶️</span></button>
+                    <button class="btn btn-timeline" id="btn-timeline-end" title="Jump to end" disabled><span>⏭️</span></button>
+                    <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1" disabled>
+                    <span id="timeline-label">0 / 0</span>
+                    <button class="btn btn-timeline-export" id="btn-export-run" title="Export completed run" disabled><span>💾</span> Export</button>
+                </div>
+
+                <!-- Run Metrics -->
+                <div id="run-summary" style="display:none;">
+                    <div class="run-summary-title">Run Summary</div>
+                    <div id="run-summary-content"></div>
+                </div>
+
                 <!-- Algorithm State -->
                 <div id="state-panel" style="display:none;">
                     <div class="state-panel-title">State</div>
@@ -141,11 +203,11 @@
 
     <script src="/static/js/utils.js?v=3"></script>
     <script src="/static/js/ws-client.js?v=3"></script>
-    <script src="/static/js/graph-editor.js?v=8"></script>
-    <script src="/static/js/visualizer.js?v=7"></script>
-    <script src="/static/js/algorithm-panel.js?v=7"></script>
+    <script src="/static/js/graph-editor.js?v=9"></script>
+    <script src="/static/js/visualizer.js?v=10"></script>
+    <script src="/static/js/algorithm-panel.js?v=19"></script>
     <script src="/static/js/code-editor.js?v=4"></script>
-    <script src="/static/js/preset-manager.js?v=4"></script>
-    <script src="/static/js/app.js?v=5"></script>
+    <script src="/static/js/preset-manager.js?v=8"></script>
+    <script src="/static/js/app.js?v=8"></script>
 </body>
 </html>

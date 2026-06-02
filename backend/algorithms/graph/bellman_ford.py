@@ -56,6 +56,22 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
         distances[source] = 0
         prev = {nid: None for nid in node_ids}
 
+        def format_distances() -> dict[str, str | float]:
+            return {
+                node_id: ("∞" if dist == float("inf") else dist)
+                for node_id, dist in distances.items()
+            }
+
+        def algorithm_state(iteration: int | None = None, edge: str | None = None, direction: str | None = None) -> dict:
+            return {
+                "source": source,
+                "iteration": iteration,
+                "edge": edge,
+                "direction": direction,
+                "distances": format_distances(),
+                "previous": {node: pred for node, pred in prev.items() if pred is not None},
+            }
+
         yield Step(
             action=StepAction.SET_NODE_COLOR,
             target_type="node",
@@ -63,6 +79,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
             value="current",
             message=f"Starting Bellman-Ford from {source}",
             phase="init",
+            state=algorithm_state(),
         )
 
         for nid in node_ids:
@@ -74,6 +91,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     value=f"{nid}\n∞",
                     message=f"Distance to {nid}: ∞",
                     phase="init",
+                    state=algorithm_state(),
                 )
             else:
                 yield Step(
@@ -83,6 +101,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     value=f"{nid}\n0",
                     message=f"Distance to {nid}: 0",
                     phase="init",
+                    state=algorithm_state(),
                 )
 
         num_nodes = len(node_ids)
@@ -96,6 +115,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                 target_id="",
                 message=f"--- Iteration {i + 1}/{num_nodes - 1} ---",
                 phase="explore",
+                state=algorithm_state(i + 1),
             )
 
             for edge in graph.edges:
@@ -109,6 +129,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     value="exploring",
                     message=f"Checking {u} → {v} (weight={w})",
                     phase="relax",
+                    state=algorithm_state(i + 1, edge_id, "forward"),
                 )
 
                 if distances[u] != float("inf") and distances[u] + w < distances[v]:
@@ -124,6 +145,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                         value=f"{v}\n{distances[v]}",
                         message=f"Relaxed {v}: {old} → {distances[v]}",
                         phase="relax",
+                        state=algorithm_state(i + 1, edge_id, "forward"),
                     )
 
                     yield Step(
@@ -133,6 +155,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message="",
                         phase="relax",
+                        state=algorithm_state(i + 1, edge_id, "forward"),
                     )
 
                 # Check reverse edge for undirected graphs
@@ -144,6 +167,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message=f"Checking {v} → {u} (weight={w})",
                         phase="relax",
+                        state=algorithm_state(i + 1, edge_id, "reverse"),
                     )
 
                     if distances[v] != float("inf") and distances[v] + w < distances[u]:
@@ -159,6 +183,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                             value=f"{u}\n{distances[u]}",
                             message=f"Relaxed {u}: {old} → {distances[u]}",
                             phase="relax",
+                            state=algorithm_state(i + 1, edge_id, "reverse"),
                         )
 
                 yield Step(
@@ -167,6 +192,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     target_id=edge_id,
                     message="",
                     phase="relax",
+                    state=algorithm_state(i + 1, edge_id),
                 )
 
             if not updated:
@@ -176,6 +202,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     target_id="",
                     message="No updates in this iteration - early termination",
                     phase="finalize",
+                    state=algorithm_state(i + 1),
                 )
                 break
 
@@ -195,6 +222,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     value="path",
                     message=f"Negative cycle detected via edge {u} → {v}!",
                     phase="result",
+                    state=algorithm_state(num_nodes - 1, edge_id_fwd, "forward"),
                 )
                 break
 
@@ -207,6 +235,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                     value="path",
                     message=f"Negative cycle detected via edge {v} → {u}!",
                     phase="result",
+                    state=algorithm_state(num_nodes - 1, edge_id_rev, "reverse"),
                 )
                 break
 
@@ -217,6 +246,7 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                 target_id="",
                 message="No negative cycles detected. Bellman-Ford complete.",
                 phase="result",
+                state=algorithm_state(num_nodes - 1),
             )
             # Mark settled nodes
             for nid in node_ids:
@@ -228,4 +258,5 @@ class BellmanFordAlgorithm(AlgorithmProtocol):
                         value="visited",
                         message=f"Final distance to {nid}: {distances[nid]}",
                         phase="result",
+                        state=algorithm_state(num_nodes - 1),
                     )

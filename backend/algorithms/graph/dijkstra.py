@@ -66,6 +66,24 @@ class DijkstraAlgorithm(AlgorithmProtocol):
         visited = set()
         heap = [(0, source)]
 
+        def format_distances() -> dict[str, str | float]:
+            return {
+                node_id: ("∞" if dist == float("inf") else dist)
+                for node_id, dist in distances.items()
+            }
+
+        def algorithm_state(current: str | None = None, neighbor: str | None = None, edge_id: str | None = None) -> dict:
+            return {
+                "current": current,
+                "neighbor": neighbor,
+                "edge": edge_id,
+                "source": source,
+                "visited": sorted(visited),
+                "queue": [[dist, node] for dist, node in sorted(heap)],
+                "distances": format_distances(),
+                "previous": {node: prev_node for node, prev_node in prev.items() if prev_node is not None},
+            }
+
         yield Step(
             action=StepAction.SET_NODE_COLOR,
             target_type="node",
@@ -73,6 +91,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
             value="current",
             message=f"Starting Dijkstra from node {source}",
             phase="init",
+            state=algorithm_state(source),
         )
 
         for node in graph.nodes:
@@ -84,6 +103,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                     value=f"{node.label}\n∞",
                     message=f"Distance to {node.id}: ∞",
                     phase="init",
+                    state=algorithm_state(source),
                 )
 
         yield Step(
@@ -93,6 +113,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
             value=f"{source}\n0",
             message=f"Distance to {source}: 0",
             phase="init",
+            state=algorithm_state(source),
         )
 
         while heap:
@@ -110,6 +131,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                 value="current",
                 message=f"Visiting node {current} (distance = {dist})",
                 phase="explore",
+                state=algorithm_state(current),
             )
 
             for neighbor, weight, edge_id in adj.get(current, []):
@@ -125,6 +147,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                     value="exploring",
                     message=f"Checking edge {current} → {neighbor} (weight={weight})",
                     phase="relax",
+                    state=algorithm_state(current, neighbor, edge_id),
                 )
 
                 if new_dist < distances[neighbor]:
@@ -140,6 +163,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                         value=f"{neighbor}\n{new_dist}",
                         message=f"Updated distance to {neighbor}: {old_dist} → {new_dist}",
                         phase="relax",
+                        state=algorithm_state(current, neighbor, edge_id),
                     )
 
                     yield Step(
@@ -149,6 +173,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message=f"Node {neighbor} updated",
                         phase="relax",
+                        state=algorithm_state(current, neighbor, edge_id),
                     )
 
                 yield Step(
@@ -157,6 +182,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                     target_id=edge_id,
                     message="",
                     phase="relax",
+                    state=algorithm_state(current),
                 )
 
             yield Step(
@@ -166,6 +192,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                 value="settled",
                 message=f"Node {current} settled (final distance = {dist})",
                 phase="finalize",
+                state=algorithm_state(current),
             )
 
         # Show shortest paths
@@ -175,6 +202,7 @@ class DijkstraAlgorithm(AlgorithmProtocol):
             target_id="",
             message="All nodes settled. Showing results.",
             phase="result",
+            state=algorithm_state(),
         )
 
         for node in graph.nodes:
@@ -194,6 +222,12 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                     value=path,
                     message=f"Shortest path to {node.id}: {' → '.join(path)} (distance = {distances[node.id]})",
                     phase="result",
+                    state={
+                        **algorithm_state(),
+                        "path": path,
+                        "path_target": node.id,
+                        "path_distance": distances[node.id],
+                    },
                 )
 
                 # Reset path highlight before next
@@ -205,4 +239,5 @@ class DijkstraAlgorithm(AlgorithmProtocol):
                         value="default",
                         message="",
                         phase="result",
+                        state=algorithm_state(),
                     )

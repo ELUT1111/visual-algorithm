@@ -40,6 +40,7 @@ class KruskalAlgorithm(AlgorithmProtocol):
             emoji="🔗",
             parameters=[],
             requires_weighted=True,
+            requires_undirected=True,
             time_complexity="O(E log E)",
             space_complexity="O(V + E)",
             use_cases=[

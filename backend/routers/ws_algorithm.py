@@ -39,6 +39,104 @@ def _is_dag(graph: Graph) -> bool:
     return visited_count == len(graph.nodes)
 
 
+def _edge_name(edge) -> str:
+    return f"{edge.source}->{edge.target}"
+
+
+def _has_negative_cycle(graph: Graph, source: str | None = None) -> bool:
+    """Return True if a negative cycle is reachable from source, or anywhere when source is None."""
+    node_ids = [node.id for node in graph.nodes]
+    if not node_ids:
+        return False
+
+    if source is None:
+        distances = {node_id: 0.0 for node_id in node_ids}
+    else:
+        distances = {node_id: float("inf") for node_id in node_ids}
+        distances[source] = 0.0
+
+    edge_views = []
+    node_set = set(node_ids)
+    for edge in graph.edges:
+        if edge.source not in node_set or edge.target not in node_set:
+            continue
+        edge_views.append((edge.source, edge.target, edge.weight))
+        if not graph.directed:
+            edge_views.append((edge.target, edge.source, edge.weight))
+
+    for _ in range(max(0, len(node_ids) - 1)):
+        updated = False
+        for source_id, target_id, weight in edge_views:
+            if distances[source_id] == float("inf"):
+                continue
+            if distances[source_id] + weight < distances[target_id]:
+                distances[target_id] = distances[source_id] + weight
+                updated = True
+        if not updated:
+            break
+
+    return any(
+        distances[source_id] != float("inf") and distances[source_id] + weight < distances[target_id]
+        for source_id, target_id, weight in edge_views
+    )
+
+
+def _validate_runner_inputs(algo_key: str, meta, graph: Graph, params: dict) -> None:
+    """Validate graph and parameter preconditions before creating an algorithm runner."""
+    for p in meta.parameters:
+        if p.get("required") and not params.get(p["name"]):
+            raise ValueError(f"Parameter '{p['name']}' is required")
+
+    if meta.requires_graph and not meta.builds_structure and not graph.nodes:
+        raise ValueError("Graph has no nodes")
+
+    if meta.requires_directed and not graph.directed:
+        raise ValueError(f"Algorithm '{meta.name}' requires a directed graph")
+
+    if meta.requires_undirected and graph.directed:
+        raise ValueError(f"Algorithm '{meta.name}' requires an undirected graph")
+
+    if meta.requires_dag:
+        if not graph.directed:
+            raise ValueError(f"Algorithm '{meta.name}' requires a directed acyclic graph")
+        if not _is_dag(graph):
+            raise ValueError(f"Algorithm '{meta.name}' requires a DAG, but this graph contains a cycle")
+
+    if not meta.allows_negative_weights:
+        negative_edges = [edge for edge in graph.edges if edge.weight < 0]
+        if negative_edges:
+            names = ", ".join(_edge_name(edge) for edge in negative_edges[:3])
+            raise ValueError(f"Algorithm '{meta.name}' does not support negative edge weights: {names}")
+
+    if meta.requires_graph and not meta.builds_structure:
+        node_ids = {node.id for node in graph.nodes}
+        node_param_names = {"source", "target", "start", "end", "from", "to"}
+        for p in meta.parameters:
+            pname = p["name"]
+            if p.get("type") == "node" or pname in node_param_names:
+                value = params.get(pname, "")
+                if value and value not in node_ids:
+                    raise ValueError(f"Node '{value}' not found in graph")
+
+    if meta.name in {"edmonds_karp", "dinic"}:
+        source = params.get("source")
+        target = params.get("target")
+        if source == target:
+            raise ValueError(f"Algorithm '{meta.name}' requires source and target to be different")
+        non_positive = [edge for edge in graph.edges if edge.weight <= 0]
+        if non_positive:
+            names = ", ".join(_edge_name(edge) for edge in non_positive[:3])
+            raise ValueError(f"Algorithm '{meta.name}' requires positive capacities on every edge: {names}")
+
+    if meta.name == "johnson" and _has_negative_cycle(graph):
+        raise ValueError("Johnson requires a graph without negative-weight cycles")
+
+    if meta.name == "spfa":
+        source = params.get("source")
+        if source and _has_negative_cycle(graph, source=source):
+            raise ValueError(f"SPFA detected a reachable negative-weight cycle from source '{source}'")
+
+
 @router.websocket("/ws/run")
 async def run_algorithm_ws(websocket: WebSocket):
     await websocket.accept()
@@ -84,40 +182,8 @@ async def run_algorithm_ws(websocket: WebSocket):
         algo = registry.get(algo_key)
         graph = Graph(**graph_data)
 
-        # Validate required params
         meta = algo.get_meta()
-        for p in meta.parameters:
-            if p.get("required") and not params.get(p["name"]):
-                raise ValueError(f"Parameter '{p['name']}' is required")
-
-        if meta.requires_graph and not meta.builds_structure and not graph.nodes:
-            raise ValueError("Graph has no nodes")
-
-        if meta.requires_directed and not graph.directed:
-            raise ValueError(f"Algorithm '{meta.name}' requires a directed graph")
-
-        if meta.requires_dag:
-            if not graph.directed:
-                raise ValueError(f"Algorithm '{meta.name}' requires a directed acyclic graph")
-            if not _is_dag(graph):
-                raise ValueError(f"Algorithm '{meta.name}' requires a DAG, but this graph contains a cycle")
-
-        if not meta.allows_negative_weights:
-            negative_edges = [e for e in graph.edges if e.weight < 0]
-            if negative_edges:
-                raise ValueError(f"Algorithm '{meta.name}' does not support negative edge weights")
-
-        # Skip node-ID validation for structure-building algorithms.
-        if meta.requires_graph and not meta.builds_structure:
-            node_ids = {n.id for n in graph.nodes}
-            # Only validate parameters that actually reference node IDs
-            node_param_names = {"source", "target", "start", "end", "from", "to"}
-            for p in meta.parameters:
-                pname = p["name"]
-                if p.get("type") == "node" or pname in node_param_names:
-                    val = params.get(pname, "")
-                    if val and val not in node_ids:
-                        raise ValueError(f"Node '{val}' not found in graph")
+        _validate_runner_inputs(algo_key, meta, graph, params)
 
         r = AlgorithmRunner(algo, graph, params)
         r.speed = spd

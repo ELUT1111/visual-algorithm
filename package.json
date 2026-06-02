@@ -1,0 +1,14 @@
+{
+  "name": "visual-algorithm-lab",
+  "private": true,
+  "scripts": {
+    "check:js": "node --check playwright.config.js && node --check frontend/js/utils.js && node --check frontend/js/ws-client.js && node --check frontend/js/graph-editor.js && node --check frontend/js/visualizer.js && node --check frontend/js/algorithm-panel.js && node --check frontend/js/code-editor.js && node --check frontend/js/preset-manager.js && node --check frontend/js/app.js && node --check tests/e2e/smoke.spec.js",
+    "test:unit": "python -m unittest discover -v",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "verify": "npm run check:js && npm run test:unit && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}

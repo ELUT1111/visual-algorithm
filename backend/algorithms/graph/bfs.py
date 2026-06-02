@@ -66,6 +66,15 @@ class BFSAlgorithm(AlgorithmProtocol):
         parent = {source: None}
         queue = deque([source])
 
+        def traversal_state(current: str | None = None) -> dict:
+            return {
+                "current": current,
+                "target": target,
+                "queue": list(queue),
+                "visited": sorted(visited),
+                "parent": {node: pred for node, pred in parent.items() if pred is not None},
+            }
+
         yield Step(
             action=StepAction.SET_NODE_COLOR,
             target_type="node",
@@ -73,6 +82,7 @@ class BFSAlgorithm(AlgorithmProtocol):
             value="current",
             message=f"Starting BFS from node {source}",
             phase="init",
+            state=traversal_state(source),
         )
 
         while queue:
@@ -85,6 +95,7 @@ class BFSAlgorithm(AlgorithmProtocol):
                 value="current",
                 message=f"Dequeued: {current}",
                 phase="explore",
+                state=traversal_state(current),
             )
 
             if target and current == target:
@@ -103,6 +114,7 @@ class BFSAlgorithm(AlgorithmProtocol):
                     value=path,
                     message=f"Found target {target}! Path: {' → '.join(path)}",
                     phase="result",
+                    state={**traversal_state(current), "path": path, "found": True},
                 )
                 return
 
@@ -121,6 +133,7 @@ class BFSAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message=f"Discovered {neighbor} via {current}",
                         phase="explore",
+                        state=traversal_state(current),
                     )
 
                     yield Step(
@@ -130,6 +143,7 @@ class BFSAlgorithm(AlgorithmProtocol):
                         value="exploring",
                         message=f"Enqueued: {neighbor}",
                         phase="explore",
+                        state=traversal_state(current),
                     )
 
             yield Step(
@@ -139,6 +153,7 @@ class BFSAlgorithm(AlgorithmProtocol):
                 value="visited",
                 message=f"Node {current} fully explored",
                 phase="finalize",
+                state=traversal_state(current),
             )
 
         if target:
@@ -148,6 +163,7 @@ class BFSAlgorithm(AlgorithmProtocol):
                 target_id="",
                 message=f"Target {target} not reachable from {source}",
                 phase="result",
+                state={**traversal_state(), "found": False},
             )
         else:
             yield Step(
@@ -156,4 +172,5 @@ class BFSAlgorithm(AlgorithmProtocol):
                 target_id="",
                 message=f"BFS complete. Visited {len(visited)} nodes.",
                 phase="result",
+                state=traversal_state(),
             )
