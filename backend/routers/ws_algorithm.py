@@ -118,7 +118,7 @@ def _validate_runner_inputs(algo_key: str, meta, graph: Graph, params: dict) -> 
                 if value and value not in node_ids:
                     raise ValueError(f"Node '{value}' not found in graph")
 
-    if meta.name in {"edmonds_karp", "dinic"}:
+    if meta.name in {"edmonds_karp", "dinic", "push_relabel"}:
         source = params.get("source")
         target = params.get("target")
         if source == target:

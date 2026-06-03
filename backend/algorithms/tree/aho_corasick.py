@@ -1,10 +1,10 @@
-"""Aho-Corasick automaton — multi-pattern string matching."""
+"""Aho-Corasick automaton for multi-pattern string matching."""
 from __future__ import annotations
 
 from collections import deque
 from typing import Generator
 
-from backend.engine.protocol import AlgorithmProtocol, AlgorithmMeta, Step, StepAction
+from backend.engine.protocol import AlgorithmMeta, AlgorithmProtocol, Step, StepAction
 from backend.engine.registry import registry
 
 
@@ -14,372 +14,362 @@ class AhoCorasickAlgorithm(AlgorithmProtocol):
         return AlgorithmMeta(
             name="aho_corasick",
             category="tree",
-            description="Aho-Corasick automaton for multi-pattern string matching — "
-            "builds a trie with failure links and scans text in one pass",
-            emoji="🔍",
+            description="Build a trie with failure links and scan text for multiple patterns in one pass",
+            emoji="AC",
             parameters=[
-                {"name": "patterns", "type": "str", "required": True,
-                 "description": "Comma-separated patterns (e.g. he,she,his,her)"},
-                {"name": "text", "type": "str", "required": True,
-                 "description": "Text to search (e.g. ashers)"},
+                {"name": "patterns", "type": "str", "required": True, "description": "Comma-separated patterns"},
+                {"name": "text", "type": "str", "required": True, "description": "Text to search"},
             ],
-            time_complexity="O(n + m + z) — n=total pattern chars, m=text length, z=matches",
-            space_complexity="O(n * ALPHABET_SIZE)",
+            time_complexity="O(total pattern length + text length + matches)",
+            space_complexity="O(total pattern length * alphabet)",
             layout="hierarchical",
             builds_structure=True,
             use_cases=[
                 "Multi-pattern string matching",
-                "Intrusion detection systems (IDS)",
-                "Antivirus signature scanning",
-                "Plagiarism detection",
+                "Intrusion detection signature scans",
+                "Antivirus pattern matching",
+                "Dictionary keyword search",
                 "DNA sequence matching",
             ],
             pseudocode=(
-                "Phase 1 — Build Trie:\n"
-                "  for each pattern:\n"
-                "    insert chars into trie, mark end node\n"
-                "\n"
-                "Phase 2 — Build Failure Links (BFS):\n"
-                "  queue = root's children\n"
-                "  while queue not empty:\n"
-                "    node = dequeue\n"
-                "    for each (char, child) of node:\n"
-                "      f = node.failure\n"
-                "      while f != root and char not in f.children:\n"
-                "        f = f.failure\n"
-                "      child.failure = f.children[char] if exists else root\n"
-                "      enqueue child\n"
-                "\n"
-                "Phase 3 — Search Text:\n"
-                "  node = root\n"
-                "  for each char in text:\n"
-                "    while node != root and char not in node.children:\n"
-                "      node = node.failure\n"
-                "    if char in node.children: node = node.children[char]\n"
-                "    if node is pattern end: report match"
+                "build trie from patterns\n"
+                "root children fail to root\n"
+                "BFS over trie nodes:\n"
+                "    follow failure links until a transition exists\n"
+                "    set child.fail and merge fail output\n"
+                "scan text:\n"
+                "    follow transitions or failure links\n"
+                "    report every pattern in current output list"
             ),
         )
 
     def run(self, graph, params) -> Generator[Step, None, None]:
-        patterns_str = params.get("patterns", "")
-        text = params.get("text", "").strip().lower()
-        if not patterns_str:
-            return
-
-        patterns = [p.strip().lower() for p in patterns_str.split(",") if p.strip()]
+        raw_patterns = str(params.get("patterns", "") or "")
+        text = str(params.get("text", "") or "").strip().lower()
+        patterns = [pattern.strip().lower() for pattern in raw_patterns.split(",") if pattern.strip()]
         if not patterns:
             return
 
-        # ---- internal trie structure ----
-        # node: {"id", "char", "children": {char: nid}, "fail": nid|None, "output": [pattern]}
         nodes: dict[str, dict] = {}
         counter = 0
 
-        def make_node(char: str) -> str:
+        def make_node(char: str, parent: str | None = None, edge_char: str = "") -> str:
             nonlocal counter
             counter += 1
-            nid = f"ac{counter}"
-            nodes[nid] = {"id": nid, "char": char, "children": {}, "fail": None, "output": [], "parent": None}
-            return nid
+            node_id = f"ac{counter}"
+            nodes[node_id] = {
+                "id": node_id,
+                "char": char,
+                "children": {},
+                "fail": None,
+                "output": [],
+                "direct_output": [],
+                "parent": parent,
+                "edge_char": edge_char,
+            }
+            return node_id
 
-        # ===================== Phase 1: Build Trie =====================
         root_id = make_node("*")
-        nodes[root_id]["fail"] = root_id  # root's failure = root
+        nodes[root_id]["fail"] = root_id
+        matches: list[dict] = []
+        scan_trace: list[dict] = []
+        failure_trace: list[dict] = []
+
+        def automaton_state(extra: dict | None = None) -> dict:
+            node_rows = {
+                node_id: {
+                    "char": node["char"],
+                    "children": dict(sorted(node["children"].items())),
+                    "fail": node["fail"],
+                    "output": list(node["output"]),
+                    "direct_output": list(node["direct_output"]),
+                    "parent": node["parent"],
+                    "edge_char": node["edge_char"],
+                }
+                for node_id, node in nodes.items()
+            }
+            payload = {
+                "patterns": list(patterns),
+                "text": text,
+                "root": root_id,
+                "node_count": len(nodes),
+                "failure_links": {node_id: node["fail"] for node_id, node in nodes.items() if node["fail"] is not None},
+                "output_table": {node_id: list(node["output"]) for node_id, node in nodes.items() if node["output"]},
+                "direct_output_table": {
+                    node_id: list(node["direct_output"]) for node_id, node in nodes.items() if node["direct_output"]
+                },
+                "automaton_nodes": node_rows,
+                "failure_trace": list(failure_trace),
+                "scan_trace": list(scan_trace),
+                "matches": list(matches),
+            }
+            if extra:
+                payload.update(extra)
+            return payload
+
         yield Step(
             action=StepAction.ADD_NODE,
             target_type="node",
             target_id=root_id,
             value={"id": root_id, "label": "(root)"},
-            message="Created automaton root",
+            message="Create Aho-Corasick root",
             phase="init",
+            state=automaton_state({"phase_detail": "create root"}),
         )
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
             target_id="",
-            message=f"Phase 1: Building trie from patterns: {', '.join(patterns)}",
+            message=f"Build trie for patterns: {', '.join(patterns)}",
             phase="init",
+            state=automaton_state({"phase_detail": "build trie"}),
         )
 
         for pattern in patterns:
-            cur = root_id
+            current = root_id
             yield Step(
                 action=StepAction.SET_NODE_COLOR,
                 target_type="node",
-                target_id=cur,
+                target_id=current,
                 value="current",
-                message=f"Inserting pattern '{pattern}'",
+                message=f"Insert pattern '{pattern}'",
                 phase="explore",
+                state=automaton_state({"current_pattern": pattern, "current_node": current}),
             )
-            for ch in pattern:
-                children = nodes[cur]["children"]
-                if ch in children:
-                    nxt = children[ch]
+            for char in pattern:
+                children = nodes[current]["children"]
+                if char in children:
+                    child = children[char]
                     yield Step(
                         action=StepAction.HIGHLIGHT_EDGE,
                         target_type="edge",
-                        target_id=f"{cur}-{nxt}",
+                        target_id=f"{current}-{child}",
                         value="exploring",
-                        message=f"Follow existing edge '{ch}'",
+                        message=f"Follow existing trie edge '{char}'",
                         phase="explore",
+                        state=automaton_state({"current_pattern": pattern, "current_node": child}),
                     )
                 else:
-                    nxt = make_node(ch)
-                    nodes[nxt]["parent"] = cur
-                    nodes[cur]["children"][ch] = nxt
+                    child = make_node(char, current, char)
+                    children[char] = child
                     yield Step(
                         action=StepAction.ADD_NODE,
                         target_type="node",
-                        target_id=nxt,
-                        value={"id": nxt, "label": ch},
-                        message=f"Create node for '{ch}'",
+                        target_id=child,
+                        value={"id": child, "label": char},
+                        message=f"Create trie node for '{char}'",
                         phase="explore",
+                        state=automaton_state({"current_pattern": pattern, "current_node": child}),
                     )
                     yield Step(
                         action=StepAction.ADD_EDGE,
                         target_type="edge",
-                        target_id=f"{cur}-{nxt}",
-                        value={"source": cur, "target": nxt, "label": ch},
-                        message=f"Add trie edge '{ch}'",
+                        target_id=f"{current}-{child}",
+                        value={"source": current, "target": child, "label": char},
+                        message=f"Add trie edge '{char}'",
                         phase="explore",
+                        state=automaton_state({"current_pattern": pattern, "current_node": child}),
                     )
-                yield Step(
-                    action=StepAction.SET_NODE_COLOR,
-                    target_type="node",
-                    target_id=nxt,
-                    value="current",
-                    message=f"Move to '{ch}'",
-                    phase="explore",
-                )
-                cur = nxt
+                current = child
 
-            nodes[cur]["output"].append(pattern)
+            nodes[current]["direct_output"].append(pattern)
+            nodes[current]["output"].append(pattern)
             yield Step(
                 action=StepAction.SET_NODE_COLOR,
                 target_type="node",
-                target_id=cur,
+                target_id=current,
                 value="path",
-                message=f"'{pattern}' complete — mark output",
+                message=f"Mark output '{pattern}' at node {current}",
                 phase="finalize",
+                state=automaton_state({"current_pattern": pattern, "output_node": current}),
             )
 
-        # ===================== Phase 2: Failure Links (BFS) =====================
-        yield Step(
-            action=StepAction.ADD_MESSAGE,
-            target_type="node",
-            target_id="",
-            message="Phase 2: Building failure links via BFS",
-            phase="init",
-        )
-
         queue: deque[str] = deque()
-        # Initialize: root's direct children fail to root
-        for ch, child_id in nodes[root_id]["children"].items():
-            nodes[child_id]["fail"] = root_id
-            queue.append(child_id)
+        for char, child in sorted(nodes[root_id]["children"].items()):
+            nodes[child]["fail"] = root_id
+            queue.append(child)
+            failure_trace.append({"node": child, "char": char, "fail": root_id, "reason": "root child"})
             yield Step(
                 action=StepAction.ADD_EDGE,
                 target_type="edge",
-                target_id=f"fail-{child_id}",
-                value={"source": child_id, "target": root_id, "label": "fail",
-                        "dashes": True, "color": "#e74c3c"},
-                message=f"fail('{nodes[child_id]['char']}') → root",
-                phase="explore",
+                target_id=f"fail-{child}",
+                value={"source": child, "target": root_id, "label": "fail", "dashes": True, "color": "#e74c3c"},
+                message=f"Set fail({child}) to root",
+                phase="init",
+                state=automaton_state({"queue": list(queue), "failure_node": child}),
             )
 
         while queue:
-            cur = queue.popleft()
+            current = queue.popleft()
             yield Step(
                 action=StepAction.SET_NODE_COLOR,
                 target_type="node",
-                target_id=cur,
+                target_id=current,
                 value="current",
-                message=f"Computing failure links for children of '{nodes[cur]['char']}'",
+                message=f"Process failure transitions from node {current}",
                 phase="explore",
+                state=automaton_state({"queue": list(queue), "current_node": current}),
             )
 
-            for ch, child_id in nodes[cur]["children"].items():
-                # Walk failure chain to find fallback
-                f = nodes[cur]["fail"]
-                while f != root_id and ch not in nodes[f]["children"]:
-                    f = nodes[f]["fail"]
-                if ch in nodes[f]["children"]:
-                    fail_target = nodes[f]["children"][ch]
+            for char, child in sorted(nodes[current]["children"].items()):
+                fallback = nodes[current]["fail"]
+                followed: list[str] = []
+                while fallback != root_id and char not in nodes[fallback]["children"]:
+                    followed.append(fallback)
+                    fallback = nodes[fallback]["fail"]
+                if char in nodes[fallback]["children"]:
+                    fail_target = nodes[fallback]["children"][char]
                 else:
                     fail_target = root_id
 
-                nodes[child_id]["fail"] = fail_target
-                # Propagate output
-                nodes[child_id]["output"] = (
-                    nodes[child_id]["output"] + nodes[fail_target]["output"]
-                )
+                nodes[child]["fail"] = fail_target
+                inherited = [pattern for pattern in nodes[fail_target]["output"] if pattern not in nodes[child]["output"]]
+                nodes[child]["output"].extend(inherited)
+                queue.append(child)
+                failure_trace.append({
+                    "node": child,
+                    "char": char,
+                    "from": current,
+                    "fail": fail_target,
+                    "followed": followed,
+                    "inherited_output": inherited,
+                })
 
                 yield Step(
-                    action=StepAction.HIGHLIGHT_EDGE,
+                    action=StepAction.ADD_EDGE,
                     target_type="edge",
-                    target_id=f"{cur}-{child_id}",
-                    value="exploring",
-                    message=f"Process child '{ch}'",
+                    target_id=f"fail-{child}",
+                    value={"source": child, "target": fail_target, "label": "fail", "dashes": True, "color": "#e74c3c"},
+                    message=f"Set fail({child}) to {fail_target}; inherit {inherited or 'no'} output",
                     phase="explore",
+                    state=automaton_state({
+                        "queue": list(queue),
+                        "current_node": child,
+                        "fail_target": fail_target,
+                        "followed_failure_links": followed,
+                    }),
                 )
 
-                if fail_target != root_id:
-                    yield Step(
-                        action=StepAction.ADD_EDGE,
-                        target_type="edge",
-                        target_id=f"fail-{child_id}",
-                        value={"source": child_id, "target": fail_target, "label": "fail",
-                                "dashes": True, "color": "#e74c3c"},
-                        message=f"fail('{ch}') → '{nodes[fail_target]['char']}'",
-                        phase="explore",
-                    )
-                else:
-                    yield Step(
-                        action=StepAction.ADD_EDGE,
-                        target_type="edge",
-                        target_id=f"fail-{child_id}",
-                        value={"source": child_id, "target": root_id, "label": "fail",
-                                "dashes": True, "color": "#e74c3c"},
-                        message=f"fail('{ch}') → root",
-                        phase="explore",
-                    )
-
-                yield Step(
-                    action=StepAction.SET_NODE_COLOR,
-                    target_type="node",
-                    target_id=child_id,
-                    value="visited",
-                    message=f"Failure link set for '{ch}'",
-                    phase="explore",
-                )
-                queue.append(child_id)
-
-            yield Step(
-                action=StepAction.SET_NODE_COLOR,
-                target_type="node",
-                target_id=cur,
-                value="visited",
-                message=f"Done with '{nodes[cur]['char']}'",
-                phase="explore",
-            )
-
-        # ===================== Phase 3: Search Text =====================
         if not text:
             yield Step(
                 action=StepAction.ADD_MESSAGE,
                 target_type="node",
                 target_id="",
-                message="No text provided — automaton construction complete.",
+                message="Automaton built; no text provided for scanning",
                 phase="result",
+                state=automaton_state({"match_count": 0}),
             )
             return
+
+        current = root_id
+        yield Step(
+            action=StepAction.ADD_MESSAGE,
+            target_type="node",
+            target_id="",
+            message=f"Scan text '{text}'",
+            phase="init",
+            state=automaton_state({"current_node": current, "scan_index": 0}),
+        )
+
+        for index, char in enumerate(text):
+            fallback_path: list[str] = []
+            while current != root_id and char not in nodes[current]["children"]:
+                old = current
+                current = nodes[current]["fail"]
+                fallback_path.append(old)
+                yield Step(
+                    action=StepAction.HIGHLIGHT_EDGE,
+                    target_type="edge",
+                    target_id=f"fail-{old}",
+                    value="exploring",
+                    message=f"No '{char}' transition; follow fail from {old} to {current}",
+                    phase="explore",
+                    state=automaton_state({
+                        "scan_index": index,
+                        "scan_char": char,
+                        "current_node": current,
+                        "fallback_path": list(fallback_path),
+                    }),
+                )
+
+            transitioned = False
+            if char in nodes[current]["children"]:
+                previous = current
+                current = nodes[current]["children"][char]
+                transitioned = True
+                yield Step(
+                    action=StepAction.HIGHLIGHT_EDGE,
+                    target_type="edge",
+                    target_id=f"{previous}-{current}",
+                    value="exploring",
+                    message=f"Read '{char}' at {index}; transition to {current}",
+                    phase="explore",
+                    state=automaton_state({
+                        "scan_index": index,
+                        "scan_char": char,
+                        "current_node": current,
+                        "fallback_path": list(fallback_path),
+                    }),
+                )
+            else:
+                yield Step(
+                    action=StepAction.SET_NODE_COLOR,
+                    target_type="node",
+                    target_id=root_id,
+                    value="current",
+                    message=f"Read '{char}' at {index}; stay at root",
+                    phase="explore",
+                    state=automaton_state({
+                        "scan_index": index,
+                        "scan_char": char,
+                        "current_node": current,
+                        "fallback_path": list(fallback_path),
+                    }),
+                )
+
+            found_here: list[dict] = []
+            for pattern in nodes[current]["output"]:
+                start = index - len(pattern) + 1
+                match = {"pattern": pattern, "start": start, "end": index, "node": current}
+                matches.append(match)
+                found_here.append(match)
+
+            scan_entry = {
+                "index": index,
+                "char": char,
+                "node": current,
+                "transitioned": transitioned,
+                "fallback_path": fallback_path,
+                "outputs": list(nodes[current]["output"]),
+                "matches": found_here,
+            }
+            scan_trace.append(scan_entry)
+
+            yield Step(
+                action=StepAction.SET_NODE_COLOR,
+                target_type="node",
+                target_id=current,
+                value="path" if found_here else "current",
+                message=(
+                    f"Match at index {index}: {', '.join(match['pattern'] for match in found_here)}"
+                    if found_here
+                    else f"No output at index {index}"
+                ),
+                phase="finalize" if found_here else "explore",
+                state=automaton_state({
+                    "scan_index": index,
+                    "scan_char": char,
+                    "current_node": current,
+                    "current_outputs": list(nodes[current]["output"]),
+                    "matches_at_index": found_here,
+                }),
+            )
 
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
             target_id="",
-            message=f"Phase 3: Searching text: '{text}'",
-            phase="init",
+            message=f"Found {len(matches)} match(es)",
+            phase="result",
+            state=automaton_state({"match_count": len(matches)}),
         )
-
-        cur = root_id
-        matches: list[tuple[int, str]] = []  # (position, pattern)
-
-        for pos, ch in enumerate(text):
-            yield Step(
-                action=StepAction.SET_NODE_COLOR,
-                target_type="node",
-                target_id=cur,
-                value="current",
-                message=f"Read '{ch}' (position {pos})",
-                phase="explore",
-            )
-
-            # Follow failure links until we find a transition or reach root
-            while cur != root_id and ch not in nodes[cur]["children"]:
-                old = cur
-                cur = nodes[cur]["fail"]
-                yield Step(
-                    action=StepAction.SET_NODE_COLOR,
-                    target_type="node",
-                    target_id=old,
-                    value="exploring",
-                    message=f"Follow fail link from '{nodes[old]['char']}'",
-                    phase="explore",
-                )
-
-            if ch in nodes[cur]["children"]:
-                nxt = nodes[cur]["children"][ch]
-                parent = nodes[nxt].get("parent")
-                if parent is not None:
-                    yield Step(
-                        action=StepAction.HIGHLIGHT_EDGE,
-                        target_type="edge",
-                        target_id=f"{parent}-{nxt}",
-                        value="exploring",
-                        message=f"Transition '{ch}' → '{nodes[nxt]['char']}'",
-                        phase="explore",
-                    )
-                cur = nxt
-            else:
-                yield Step(
-                    action=StepAction.SET_NODE_COLOR,
-                    target_type="node",
-                    target_id=cur,
-                    value="current",
-                    message=f"Stay at root (no transition for '{ch}')",
-                    phase="explore",
-                )
-
-            yield Step(
-                action=StepAction.SET_NODE_COLOR,
-                target_type="node",
-                target_id=cur,
-                value="current",
-                message=f"Now at node '{nodes[cur]['char']}'",
-                phase="explore",
-            )
-
-            # Check for matches via output
-            if nodes[cur]["output"]:
-                for pattern in nodes[cur]["output"]:
-                    matches.append((pos, pattern))
-                    # Highlight the matched node
-                    yield Step(
-                        action=StepAction.SET_NODE_COLOR,
-                        target_type="node",
-                        target_id=cur,
-                        value="path",
-                        message=f"MATCH found: '{pattern}' ending at position {pos}",
-                        phase="finalize",
-                    )
-
-        # ===================== Results =====================
-        # Reset all node colors to visited
-        for nid in nodes:
-            yield Step(
-                action=StepAction.SET_NODE_COLOR,
-                target_type="node",
-                target_id=nid,
-                value="visited",
-                message="",
-                phase="result",
-            )
-
-        if matches:
-            match_strs = [f"'{pat}' at pos {pos - len(pat) + 1}–{pos}" for pos, pat in matches]
-            yield Step(
-                action=StepAction.ADD_MESSAGE,
-                target_type="node",
-                target_id="",
-                message=f"Found {len(matches)} match(es): {', '.join(match_strs)}",
-                phase="result",
-            )
-        else:
-            yield Step(
-                action=StepAction.ADD_MESSAGE,
-                target_type="node",
-                target_id="",
-                message="No matches found.",
-                phase="result",
-            )

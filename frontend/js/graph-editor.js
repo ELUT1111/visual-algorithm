@@ -14,6 +14,7 @@ class GraphEditor {
         this._redoStack = [];
         this._maxHistory = 50;
         this._layoutLocked = false;
+        this._autoFitToken = 0;
         this._init();
     }
 
@@ -342,7 +343,26 @@ class GraphEditor {
     }
 
     fitAll() {
+        this._autoFitToken++;
         this.network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+    }
+
+    _viewportChanged(before, after) {
+        if (!before || !after) return false;
+        const epsilon = 0.001;
+        return Math.abs(before.x - after.x) > epsilon ||
+            Math.abs(before.y - after.y) > epsilon ||
+            Math.abs(before.scale - after.scale) > epsilon;
+    }
+
+    _scheduleAutoFit(delay, options) {
+        const token = ++this._autoFitToken;
+        const scheduledViewport = this.getViewport();
+        setTimeout(() => {
+            if (token !== this._autoFitToken) return;
+            if (this._viewportChanged(scheduledViewport, this.getViewport())) return;
+            this.network.fit(options);
+        }, delay);
     }
 
     focusSelected() {
@@ -394,10 +414,8 @@ class GraphEditor {
         this.nodes.add(visNodes);
         this.edges.add(visEdges);
 
-        // Auto-fit after load
-        setTimeout(() => {
-            this.network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-        }, 100);
+        // Auto-fit after load unless the viewport was already changed by the user or replay.
+        this._scheduleAutoFit(100, { animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
 
         this._scheduleSave();
 

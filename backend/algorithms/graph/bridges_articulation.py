@@ -1,4 +1,4 @@
-"""Bridge and articulation point detection for undirected graphs."""
+"""Bridge, articulation point, and biconnected component detection."""
 from __future__ import annotations
 
 from typing import Generator
@@ -13,27 +13,29 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
         return AlgorithmMeta(
             name="bridges_articulation",
             category="graph",
-            description="Find bridges and articulation points with DFS low-link values",
-            emoji="🌉",
+            description="Find bridges, articulation points, and edge-biconnected components with DFS low-link values",
+            emoji="LL",
             parameters=[],
             requires_undirected=True,
             time_complexity="O(V + E)",
-            space_complexity="O(V)",
+            space_complexity="O(V + E)",
             use_cases=[
                 "Network reliability analysis",
                 "Critical road or cable detection",
-                "Graph biconnectivity",
+                "Biconnected component decomposition",
                 "Finding single points of failure",
             ],
             pseudocode=(
-                "function DFS(u):\n"
-                "    disc[u] = low[u] = time++\n"
-                "    for each neighbor v:\n"
+                "DFS(u):\n"
+                "    disc[u] = low[u] = timer++\n"
+                "    for each edge u-v:\n"
                 "        if v unvisited:\n"
-                "            parent[v] = u; DFS(v); low[u] = min(low[u], low[v])\n"
+                "            push edge on stack; DFS(v)\n"
+                "            low[u] = min(low[u], low[v])\n"
                 "            if low[v] > disc[u]: edge u-v is a bridge\n"
-                "            if root has >1 child or low[v] >= disc[u]: u is articulation\n"
-                "        else if v != parent[u]: low[u] = min(low[u], disc[v])"
+                "            if low[v] >= disc[u]: pop one biconnected component\n"
+                "        else if v is not parent and disc[v] < disc[u]:\n"
+                "            push back edge; low[u] = min(low[u], disc[v])"
             ),
         )
 
@@ -44,31 +46,60 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
             adjacency.setdefault(edge.source, []).append((edge.target, edge_id))
             adjacency.setdefault(edge.target, []).append((edge.source, edge_id))
 
-        time = 0
+        timer = 0
         disc: dict[str, int] = {}
         low: dict[str, int] = {}
         parent: dict[str, str | None] = {node.id: None for node in graph.nodes}
         bridges: list[dict[str, str]] = []
         articulation: set[str] = set()
-        stack: list[str] = []
+        dfs_stack: list[str] = []
+        edge_stack: list[dict[str, str]] = []
+        biconnected_components: list[dict] = []
+        component_trace: list[dict] = []
 
-        def state() -> dict:
-            return {
-                "stack": list(stack),
+        def state(extra: dict | None = None) -> dict:
+            payload = {
+                "stack": list(dfs_stack),
+                "edge_stack": list(edge_stack),
                 "disc": dict(disc),
                 "low": dict(low),
-                "parent": {k: v for k, v in parent.items() if v is not None},
+                "parent": {node: pred for node, pred in parent.items() if pred is not None},
                 "bridges": list(bridges),
                 "articulation_points": sorted(articulation),
+                "biconnected_components": list(biconnected_components),
+                "component_trace": list(component_trace),
             }
+            if extra:
+                payload.update(extra)
+            return payload
+
+        def pop_component(stop_edge_id: str, reason: str) -> dict:
+            component_edges: list[dict[str, str]] = []
+            component_nodes: set[str] = set()
+            while edge_stack:
+                item = edge_stack.pop()
+                component_edges.append(item)
+                component_nodes.add(item["from"])
+                component_nodes.add(item["to"])
+                if item["edge"] == stop_edge_id:
+                    break
+            component = {
+                "id": len(biconnected_components) + 1,
+                "reason": reason,
+                "edges": list(reversed(component_edges)),
+                "nodes": sorted(component_nodes),
+            }
+            biconnected_components.append(component)
+            component_trace.append(component)
+            return component
 
         def dfs(node_id: str, root: str) -> Generator[Step, None, None]:
-            nonlocal time
-            disc[node_id] = time
-            low[node_id] = time
-            time += 1
+            nonlocal timer
+            disc[node_id] = timer
+            low[node_id] = timer
+            timer += 1
             child_count = 0
-            stack.append(node_id)
+            dfs_stack.append(node_id)
 
             yield Step(
                 action=StepAction.SET_NODE_COLOR,
@@ -77,7 +108,7 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                 value="current",
                 message=f"Visit {node_id}: disc={disc[node_id]}, low={low[node_id]}",
                 phase="explore",
-                state=state(),
+                state=state({"current": node_id}),
             )
 
             for neighbor, edge_id in adjacency.get(node_id, []):
@@ -91,12 +122,23 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                     value="exploring",
                     message=f"Inspect edge {node_id} -- {neighbor}",
                     phase="explore",
-                    state=state(),
+                    state=state({"current_edge": edge_id}),
                 )
 
                 if neighbor not in disc:
                     parent[neighbor] = node_id
                     child_count += 1
+                    edge_item = {"edge": edge_id, "from": node_id, "to": neighbor, "type": "tree"}
+                    edge_stack.append(edge_item)
+                    yield Step(
+                        action=StepAction.ADD_MESSAGE,
+                        target_type="edge",
+                        target_id=edge_id,
+                        message=f"Push tree edge {node_id} -- {neighbor} onto BCC edge stack",
+                        phase="explore",
+                        state=state({"pushed_edge": edge_item}),
+                    )
+
                     yield from dfs(neighbor, root)
 
                     low[node_id] = min(low[node_id], low[neighbor])
@@ -106,11 +148,11 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                         target_id=node_id,
                         message=f"After {neighbor}, low[{node_id}] = {low[node_id]}",
                         phase="relax",
-                        state=state(),
+                        state=state({"current": node_id, "child": neighbor}),
                     )
 
                     if low[neighbor] > disc[node_id]:
-                        bridges.append({"edge": f"{node_id}-{neighbor}", "from": node_id, "to": neighbor})
+                        bridges.append({"edge": edge_id, "from": node_id, "to": neighbor})
                         yield Step(
                             action=StepAction.SET_EDGE_COLOR,
                             target_type="edge",
@@ -118,7 +160,7 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                             value="path",
                             message=f"Bridge found: {node_id} -- {neighbor}",
                             phase="result",
-                            state=state(),
+                            state=state({"bridge": edge_id}),
                         )
 
                     if (node_id == root and child_count > 1) or (
@@ -132,17 +174,31 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                             value="path",
                             message=f"Articulation point found: {node_id}",
                             phase="result",
-                            state=state(),
+                            state=state({"articulation": node_id}),
                         )
-                else:
+
+                    if low[neighbor] >= disc[node_id]:
+                        component = pop_component(edge_id, f"low[{neighbor}] >= disc[{node_id}]")
+                        yield Step(
+                            action=StepAction.MARK_PATH,
+                            target_type="node",
+                            target_id="",
+                            value={"nodes": component["nodes"], "edges": [edge["edge"] for edge in component["edges"]]},
+                            message=f"Biconnected component {component['id']}: {', '.join(component['nodes'])}",
+                            phase="result",
+                            state=state({"biconnected_component": component}),
+                        )
+                elif disc[neighbor] < disc[node_id]:
+                    edge_item = {"edge": edge_id, "from": node_id, "to": neighbor, "type": "back"}
+                    edge_stack.append(edge_item)
                     low[node_id] = min(low[node_id], disc[neighbor])
                     yield Step(
                         action=StepAction.ADD_MESSAGE,
-                        target_type="node",
-                        target_id=node_id,
-                        message=f"Back edge to {neighbor}; low[{node_id}] = {low[node_id]}",
+                        target_type="edge",
+                        target_id=edge_id,
+                        message=f"Back edge to {neighbor}; push edge and set low[{node_id}] = {low[node_id]}",
                         phase="relax",
-                        state=state(),
+                        state=state({"back_edge": edge_item}),
                     )
 
                 yield Step(
@@ -154,7 +210,7 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                     state=state(),
                 )
 
-            stack.pop()
+            dfs_stack.pop()
             yield Step(
                 action=StepAction.SET_NODE_COLOR,
                 target_type="node",
@@ -162,14 +218,14 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
                 value="visited",
                 message=f"Finish {node_id}",
                 phase="finalize",
-                state=state(),
+                state=state({"current": node_id}),
             )
 
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
             target_id="",
-            message="Start DFS low-link scan",
+            message="Start DFS low-link scan with BCC edge stack",
             phase="init",
             state=state(),
         )
@@ -177,12 +233,26 @@ class BridgesArticulationAlgorithm(AlgorithmProtocol):
         for node in graph.nodes:
             if node.id not in disc:
                 yield from dfs(node.id, node.id)
+                if edge_stack:
+                    component = pop_component(edge_stack[-1]["edge"], "flush remaining component after DFS root")
+                    yield Step(
+                        action=StepAction.MARK_PATH,
+                        target_type="node",
+                        target_id="",
+                        value={"nodes": component["nodes"], "edges": [edge["edge"] for edge in component["edges"]]},
+                        message=f"Biconnected component {component['id']}: {', '.join(component['nodes'])}",
+                        phase="result",
+                        state=state({"biconnected_component": component}),
+                    )
 
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
             target_id="",
-            message=f"Found {len(bridges)} bridge(s) and {len(articulation)} articulation point(s)",
+            message=(
+                f"Found {len(bridges)} bridge(s), {len(articulation)} articulation point(s), "
+                f"and {len(biconnected_components)} biconnected component(s)"
+            ),
             phase="result",
             state=state(),
         )

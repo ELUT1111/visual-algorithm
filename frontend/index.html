@@ -6,7 +6,7 @@
     <title>Visual Algorithm Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=21">
+    <link rel="stylesheet" href="/static/css/style.css?v=22">
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
@@ -201,6 +201,15 @@
                     <div id="run-summary-content"></div>
                 </div>
 
+                <!-- Saved Run Records -->
+                <div id="run-history">
+                    <div class="run-history-title panel-title">
+                        <span>Run Records</span>
+                        <button class="btn btn-sm" id="btn-save-run" type="button" disabled>Save Run</button>
+                    </div>
+                    <div id="run-history-list"></div>
+                </div>
+
                 <!-- Current Step Detail -->
                 <div id="step-detail" style="display:none;">
                     <div class="step-detail-title panel-title">
@@ -239,6 +248,8 @@
                         </select>
                         <span id="log-match-count">0 steps</span>
                         <button class="btn btn-sm" id="btn-clear-log-filter" type="button">Clear</button>
+                        <button class="btn btn-sm" id="btn-copy-log" type="button">Copy</button>
+                        <button class="btn btn-sm" id="btn-export-log" type="button">Export</button>
                     </div>
                     <div id="step-log-content"></div>
                 </div>
@@ -256,7 +267,7 @@
     <script src="/static/js/ws-client.js?v=3"></script>
     <script src="/static/js/graph-editor.js?v=11"></script>
     <script src="/static/js/visualizer.js?v=10"></script>
-    <script src="/static/js/algorithm-panel.js?v=31"></script>
+    <script src="/static/js/algorithm-panel.js?v=38"></script>
     <script src="/static/js/code-editor.js?v=4"></script>
     <script src="/static/js/preset-manager.js?v=8"></script>
     <script src="/static/js/app.js?v=9"></script>

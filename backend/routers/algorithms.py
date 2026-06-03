@@ -213,7 +213,7 @@ def _generate_params(algo_meta, graph_data: dict, complexity: str | None) -> dic
             if name == "target" and algo_meta.name == "subset_sum" and generated_values:
                 sample_size = random.randint(1, min(4, len(generated_values)))
                 params[name] = str(sum(int(v) for v in random.sample(generated_values, sample_size)))
-            elif name == "target" and algo_meta.name in {"edmonds_karp", "dinic"} and node_ids:
+            elif name == "target" and algo_meta.name in {"edmonds_karp", "dinic", "push_relabel"} and node_ids:
                 choices = [node_id for node_id in node_ids if node_id != params.get("source")]
                 params[name] = random.choice(choices or node_ids)
             elif name == "target" and generated_values:

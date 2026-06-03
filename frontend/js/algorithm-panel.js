@@ -20,6 +20,7 @@ class AlgorithmPanel {
         this.algorithmTags = this._buildAlgorithmTags();
         this.favoriteAlgorithms = new Set(this._loadStoredList('val_favoriteAlgorithms'));
         this.recentAlgorithms = this._loadStoredList('val_recentAlgorithms');
+        this.savedRunRecords = this._loadSavedRunRecords();
         this.lastRenderedState = null;
         this.logFilter = {
             query: '',
@@ -50,8 +51,10 @@ class AlgorithmPanel {
         this._setupControls();
         this._setupTimelineControls();
         this._setupLogFilters();
+        this._setupRunHistory();
         this._setupPanelToggles();
         this._setupWSHandlers();
+        this._renderRunHistory();
     }
 
     async _loadAlgorithms() {
@@ -287,6 +290,26 @@ class AlgorithmPanel {
         }
     }
 
+    _loadSavedRunRecords() {
+        try {
+            const value = JSON.parse(localStorage.getItem('val_savedRunRecords') || '[]');
+            if (!Array.isArray(value)) return [];
+            return value
+                .filter(item => item && typeof item === 'object' && item.record)
+                .slice(0, 10);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    _storeSavedRunRecords() {
+        try {
+            localStorage.setItem('val_savedRunRecords', JSON.stringify(this.savedRunRecords.slice(0, 10)));
+        } catch (e) {
+            showToast('Could not save run record locally', 'error');
+        }
+    }
+
     _renderAlgorithmTags() {
         const container = document.getElementById('algorithm-tags');
         if (!container) return;
@@ -364,20 +387,32 @@ class AlgorithmPanel {
         if (category === 'string') tags.add('string');
 
         if (/(bfs|dfs|search|traversal|level_order|binary_search)/.test(text)) tags.add('search');
-        if (/(dijkstra|bellman|spfa|floyd|johnson|a\*|shortest|path)/.test(text)) tags.add('shortest-path');
-        if (/(flow|edmonds|dinic|capacity|augment)/.test(text)) tags.add('flow');
+        if (/(dijkstra|bellman|spfa|floyd|johnson|a\*|shortest|longest|critical|path)/.test(text)) tags.add('shortest-path');
+        if (/(flow|edmonds|dinic|capacity|augment|min-cost)/.test(text)) tags.add('flow');
         if (/(sort|quick|merge|heap_sort|bubble|topological)/.test(text)) tags.add('sorting');
         if (/(mst|minimum spanning|prim|kruskal)/.test(text)) tags.add('mst');
-        if (/(scc|component|cycle|bridge|articulation|union_find|bipartite)/.test(text)) tags.add('graph-structure');
-        if (/(match|pattern|kmp|rabin|boyer|z_algorithm|aho|palindrome|manacher)/.test(text)) tags.add('matching');
-        if (/(knapsack|coin|lcs|edit|subset|word|matrix|fibonacci|lis|dynamic)/.test(text)) tags.add('dp-table');
-        if (/(heap|trie|bst|tree|avl|black|btree|fenwick|huffman)/.test(text)) tags.add('data-structure');
+        if (/(scc|component|cycle|bridge|articulation|union_find|bipartite|matching)/.test(text)) tags.add('graph-structure');
+        if (/(match|matching|assignment|pattern|kmp|rabin|boyer|z_algorithm|suffix|aho|palindrome|manacher)/.test(text)) tags.add('matching');
+        if (/(knapsack|coin|lcs|edit|subset|word|matrix|fibonacci|lis|dynamic|hungarian|assignment)/.test(text)) tags.add('dp-table');
+        if (/(heap|treap|trie|bst|tree|avl|black|btree|fenwick|segment|huffman)/.test(text)) tags.add('data-structure');
 
         const overrides = {
             'graph/topological_sort': ['graph', 'sorting', 'graph-structure'],
+            'graph/dag_longest_path': ['graph', 'dp', 'shortest-path', 'graph-structure'],
+            'graph/euler_path': ['graph', 'graph-structure'],
             'array/kadane': ['array', 'dp', 'dp-table'],
+            'array/sparse_table': ['array', 'data-structure'],
+            'graph/hopcroft_karp': ['graph', 'graph-structure', 'matching'],
+            'graph/min_cost_max_flow': ['graph', 'flow', 'shortest-path'],
+            'graph/push_relabel': ['graph', 'flow'],
+            'graph/stoer_wagner': ['graph', 'graph-structure'],
+            'dp/hungarian': ['dp', 'matching', 'dp-table'],
+            'string/suffix_array': ['string', 'matching', 'data-structure'],
+            'tree/lca': ['tree', 'search', 'data-structure'],
+            'tree/heavy_light_decomposition': ['tree', 'data-structure'],
             'tree/aho_corasick': ['tree', 'string', 'matching', 'data-structure'],
-            'tree/fenwick_tree': ['tree', 'array', 'data-structure']
+            'tree/fenwick_tree': ['tree', 'array', 'data-structure'],
+            'tree/segment_tree': ['tree', 'array', 'data-structure']
         };
         (overrides[key] || []).forEach(tag => tags.add(tag));
 
@@ -1001,6 +1036,8 @@ class AlgorithmPanel {
                     'graph/prim',
                     'graph/kruskal',
                     'graph/topological_sort',
+                    'graph/dag_longest_path',
+                    'graph/euler_path',
                     'graph/connected_components'
                 ]
             },
@@ -1017,7 +1054,11 @@ class AlgorithmPanel {
                     'graph/spfa',
                     'graph/johnson',
                     'graph/edmonds_karp',
-                    'graph/dinic'
+                    'graph/dinic',
+                    'graph/push_relabel',
+                    'graph/min_cost_max_flow',
+                    'graph/hopcroft_karp',
+                    'graph/stoer_wagner'
                 ]
             },
             {
@@ -1033,7 +1074,8 @@ class AlgorithmPanel {
                     'dp/lis',
                     'dp/matrix_chain_multiplication',
                     'dp/subset_sum',
-                    'dp/word_break'
+                    'dp/word_break',
+                    'dp/hungarian'
                 ]
             },
             {
@@ -1045,7 +1087,8 @@ class AlgorithmPanel {
                     'string/rabin_karp',
                     'string/boyer_moore',
                     'string/z_algorithm',
-                    'string/manacher'
+                    'string/manacher',
+                    'string/suffix_array'
                 ]
             },
             {
@@ -1056,10 +1099,14 @@ class AlgorithmPanel {
                     'tree/bst',
                     'tree/avl',
                     'tree/red_black',
+                    'tree/treap',
                     'tree/btree',
                     'tree/bplus',
                     'tree/heap',
                     'tree/fenwick_tree',
+                    'tree/segment_tree',
+                    'tree/lca',
+                    'tree/heavy_light_decomposition',
                     'tree/trie',
                     'tree/aho_corasick',
                     'tree/huffman'
@@ -1075,7 +1122,8 @@ class AlgorithmPanel {
                     'array/merge_sort',
                     'array/heap_sort',
                     'array/binary_search',
-                    'array/kadane'
+                    'array/kadane',
+                    'array/sparse_table'
                 ]
             }
         ];
@@ -1174,6 +1222,91 @@ class AlgorithmPanel {
             ]
         };
 
+        const matchingGraph = {
+            name: 'Bipartite Matching',
+            description: 'Worker-task graph for maximum bipartite matching',
+            directed: false,
+            nodes: [
+                { id: 'L1', label: 'L1', x: -180, y: -120, metadata: { partition: 'L' } },
+                { id: 'L2', label: 'L2', x: -180, y: 0, metadata: { partition: 'L' } },
+                { id: 'L3', label: 'L3', x: -180, y: 120, metadata: { partition: 'L' } },
+                { id: 'R1', label: 'R1', x: 180, y: -120, metadata: { partition: 'R' } },
+                { id: 'R2', label: 'R2', x: 180, y: 0, metadata: { partition: 'R' } },
+                { id: 'R3', label: 'R3', x: 180, y: 120, metadata: { partition: 'R' } }
+            ],
+            edges: [
+                { source: 'L1', target: 'R1', weight: 1, label: '' },
+                { source: 'L1', target: 'R2', weight: 1, label: '' },
+                { source: 'L2', target: 'R1', weight: 1, label: '' },
+                { source: 'L2', target: 'R3', weight: 1, label: '' },
+                { source: 'L3', target: 'R2', weight: 1, label: '' },
+                { source: 'L3', target: 'R3', weight: 1, label: '' }
+            ]
+        };
+
+        const costFlowNetwork = {
+            name: 'Costed Flow Network',
+            description: 'Directed network with capacity and cost metadata',
+            directed: true,
+            nodes: [
+                { id: 'S', label: 'S', x: -260, y: 0 },
+                { id: 'A', label: 'A', x: -80, y: -90 },
+                { id: 'B', label: 'B', x: -80, y: 90 },
+                { id: 'T', label: 'T', x: 220, y: 0 }
+            ],
+            edges: [
+                { source: 'S', target: 'A', weight: 2, label: 'c1', directed: true, metadata: { capacity: 2, cost: 1 } },
+                { source: 'S', target: 'B', weight: 1, label: 'c2', directed: true, metadata: { capacity: 1, cost: 2 } },
+                { source: 'A', target: 'B', weight: 1, label: 'c1', directed: true, metadata: { capacity: 1, cost: 1 } },
+                { source: 'A', target: 'T', weight: 1, label: 'c3', directed: true, metadata: { capacity: 1, cost: 3 } },
+                { source: 'B', target: 'T', weight: 2, label: 'c1', directed: true, metadata: { capacity: 2, cost: 1 } }
+            ]
+        };
+
+        const minCutGraph = {
+            name: 'Global Min Cut',
+            description: 'Undirected weighted graph with a clear sparse cut',
+            directed: false,
+            nodes: [
+                { id: 'A', label: 'A', x: -220, y: -90 },
+                { id: 'B', label: 'B', x: -220, y: 90 },
+                { id: 'C', label: 'C', x: 0, y: -90 },
+                { id: 'D', label: 'D', x: 0, y: 90 },
+                { id: 'E', label: 'E', x: 220, y: -90 },
+                { id: 'F', label: 'F', x: 220, y: 90 }
+            ],
+            edges: [
+                { source: 'A', target: 'B', weight: 4, label: '4' },
+                { source: 'A', target: 'C', weight: 3, label: '3' },
+                { source: 'B', target: 'D', weight: 3, label: '3' },
+                { source: 'C', target: 'D', weight: 4, label: '4' },
+                { source: 'C', target: 'E', weight: 1, label: '1' },
+                { source: 'D', target: 'F', weight: 1, label: '1' },
+                { source: 'E', target: 'F', weight: 5, label: '5' }
+            ]
+        };
+
+        const eulerGraph = {
+            name: 'Euler Trail',
+            description: 'Undirected graph with exactly two odd-degree vertices',
+            directed: false,
+            nodes: [
+                { id: 'A', label: 'A', x: -180, y: 0 },
+                { id: 'B', label: 'B', x: -60, y: -100 },
+                { id: 'C', label: 'C', x: 100, y: -80 },
+                { id: 'D', label: 'D', x: 120, y: 80 },
+                { id: 'E', label: 'E', x: -40, y: 100 }
+            ],
+            edges: [
+                { source: 'A', target: 'B', weight: 1, label: '' },
+                { source: 'B', target: 'C', weight: 1, label: '' },
+                { source: 'C', target: 'D', weight: 1, label: '' },
+                { source: 'D', target: 'A', weight: 1, label: '' },
+                { source: 'A', target: 'E', weight: 1, label: '' },
+                { source: 'E', target: 'C', weight: 1, label: '' }
+            ]
+        };
+
         return {
             'graph/bfs': [
                 ex('Social path', 'Loads the social network and searches Alice to Grace.', { source: 'Alice', target: 'Grace' }, 'social_network'),
@@ -1208,6 +1341,18 @@ class AlgorithmPanel {
             'graph/dinic': [
                 ex('Level graph flow', 'Blocking flows on the same capacity network.', { source: 'S', target: 'T' }, null, flowNetwork)
             ],
+            'graph/push_relabel': [
+                ex('Preflow network', 'Saturates source edges, then pushes excess through admissible residual edges.', { source: 'S', target: 'T' }, null, flowNetwork)
+            ],
+            'graph/min_cost_max_flow': [
+                ex('Costed network', 'Tracks shortest residual paths while minimizing flow cost.', { source: 'S', target: 'T' }, null, costFlowNetwork)
+            ],
+            'graph/hopcroft_karp': [
+                ex('Worker-task matching', 'Loads a bipartite graph with three possible matches.', {}, null, matchingGraph)
+            ],
+            'graph/stoer_wagner': [
+                ex('Global min cut', 'Contracts supernodes until the lightest separating cut is found.', {}, null, minCutGraph)
+            ],
             'graph/prim': [
                 ex('City MST', 'Loads weighted city roads and grows an MST from A.', { source: 'A' }, 'city_road_network')
             ],
@@ -1216,6 +1361,12 @@ class AlgorithmPanel {
             ],
             'graph/topological_sort': [
                 ex('Weighted DAG order', 'Loads a directed acyclic graph for topological sorting.', {}, 'weighted_dag')
+            ],
+            'graph/dag_longest_path': [
+                ex('Critical path', 'Finds the longest weighted path from S to T in a DAG.', { source: 'S', target: 'T' }, 'weighted_dag')
+            ],
+            'graph/euler_path': [
+                ex('Euler trail', 'Consumes every edge exactly once with Hierholzer traversal.', { start: 'A' }, null, eulerGraph)
             ],
             'graph/cycle_detection': [
                 ex('Cycle present', 'Loads a directed graph with two cyclic SCCs.', {}, 'directed_cycle_scc'),
@@ -1304,17 +1455,27 @@ class AlgorithmPanel {
                 ex('Segmentable text', 'Splits the text into dictionary words.', { text: 'leetcode', words: 'leet,code,lee,tcode' }),
                 ex('Multiple words', 'Shows a longer segmentation path.', { text: 'catsanddog', words: 'cat,cats,and,sand,dog' })
             ],
+            'dp/hungarian': [
+                ex('Worker assignment', 'Finds the minimum-cost unique worker-task assignment.', { costs: '9,2,7;6,4,3;5,8,1' }),
+                ex('Four tasks', 'Rectangular assignment with more tasks than workers.', { costs: '4,1,3,6;2,0,5,3;3,2,2,4' })
+            ],
             'tree/bst': [
                 ex('Balanced-ish insertions', 'Builds a readable binary search tree.', { values: '50,30,70,20,40,60,80' }),
                 ex('Skewed insertions', 'Shows the worst-case chain shape.', { values: '10,20,30,40,50' })
             ],
             'tree/avl': [
                 ex('Rotation sequence', 'Triggers AVL rotations while inserting.', { values: '30,20,10,25,40,50' }),
-                ex('Mixed balance', 'Builds a larger balanced AVL tree.', { values: '10,20,30,40,50,25' })
+                ex('Mixed balance', 'Builds a larger balanced AVL tree.', { values: '10,20,30,40,50,25' }),
+                ex('Delete and rebalance', 'Deletes nodes after insertion and reports AVL rebalancing.', { values: '20,10,30,5,15,25,40,2,7', delete_values: '30,10' })
             ],
             'tree/red_black': [
                 ex('Recolor and rotate', 'Triggers common red-black balancing cases.', { values: '10,20,30,15,25,5,1' }),
-                ex('Larger tree', 'More insertions for multiple fix-up passes.', { values: '41,38,31,12,19,8' })
+                ex('Larger tree', 'More insertions for multiple fix-up passes.', { values: '41,38,31,12,19,8' }),
+                ex('Delete fix-up', 'Deletes nodes and shows red-black repair cases.', { values: '20,10,30,5,15,25,40,1,7', delete_values: '5,30' })
+            ],
+            'tree/treap': [
+                ex('Priority rotations', 'Explicit priorities force both BST insertion and heap rotations.', { values: '50,30,70,20,40,60,80', priorities: '50,30,40,10,35,20,60' }),
+                ex('Right-heavy repair', 'Shows right rotations after low-priority inserts.', { values: '10,20,30,40,50', priorities: '50,40,30,20,10' })
             ],
             'tree/btree': [
                 ex('Order 3 splits', 'Small order causes node splits quickly.', { values: '10,20,5,15,25,30,35', order: '3' }),
@@ -1332,9 +1493,22 @@ class AlgorithmPanel {
                 ex('Prefix sum', 'Builds BIT and queries prefix sum through index 5.', { values: '1,7,3,0,7,8,3,2,6,2', query_index: '5' }),
                 ex('Short updates', 'Small array with a clear query path.', { values: '2,4,5,7', query_index: '3' })
             ],
+            'tree/segment_tree': [
+                ex('Range sum', 'Builds a segment tree and queries values from index 1 to 4.', { values: '2,1,5,3,4,7', query_left: '1', query_right: '4' }),
+                ex('Point update', 'Runs a range query, then updates one leaf and refreshes ancestors.', { values: '4,8,6,1,3,5', query_left: '2', query_right: '5', update_index: '3', update_value: '10' })
+            ],
+            'tree/lca': [
+                ex('Sibling leaves', 'Finds the common ancestor of D and E in the balanced tree.', { source: 'A', node_a: 'D', node_b: 'E' }, 'binary_tree'),
+                ex('Across subtrees', 'Lifts nodes from different branches until they meet at the root.', { source: 'A', node_a: 'D', node_b: 'G' }, 'binary_tree')
+            ],
+            'tree/heavy_light_decomposition': [
+                ex('Path sum', 'Decomposes the balanced tree and queries the path from D to G.', { source: 'A', node_a: 'D', node_b: 'G', values: '1,2,3,4,5,6,7' }, 'binary_tree'),
+                ex('Same chain', 'Shows a query that stays mostly inside one heavy chain.', { source: 'A', node_a: 'D', node_b: 'B', values: '1,2,3,4,5,6,7' }, 'binary_tree')
+            ],
             'tree/trie': [
-                ex('Shared prefixes', 'Words share app/ap and ba prefixes.', { words: 'apple,app,apt,bat,bar' }),
-                ex('Lookup-style words', 'Compact vocabulary with overlapping starts.', { words: 'cat,car,cart,dog,dot' })
+                ex('Shared prefixes', 'Words share app/ap and ba prefixes.', { words: 'apple,app,apt,bat,bar', query_prefix: 'ap' }),
+                ex('Lookup-style words', 'Compact vocabulary with overlapping starts.', { words: 'cat,car,cart,dog,dot', query_prefix: 'car' }),
+                ex('Delete and count', 'Deletes a word while preserving longer prefixes and reports prefix counts.', { words: 'app,apple,apt,bat', query_prefix: 'ap', delete_words: 'app' })
             ],
             'tree/aho_corasick': [
                 ex('Classic multi-match', 'Patterns overlap inside the text.', { patterns: 'he,she,his,hers', text: 'ushers' }),
@@ -1376,9 +1550,17 @@ class AlgorithmPanel {
                 ex('Odd palindrome', 'Finds bab or aba as the longest palindrome.', { text: 'babad' }),
                 ex('Even palindrome', 'Finds the even-length palindrome bb.', { text: 'cbbd' })
             ],
+            'string/suffix_array': [
+                ex('Banana search', 'Builds suffix ranks and searches ana.', { text: 'banana', pattern: 'ana' }),
+                ex('Repeated prefix', 'Several repeated suffix prefixes make rank updates visible.', { text: 'mississippi', pattern: 'issi' })
+            ],
             'array/kadane': [
                 ex('Profit window', 'Classic maximum subarray example.', { values: '-2,1,-3,4,-1,2,1,-5,4' }),
                 ex('All negative', 'Returns the largest single element.', { values: '-8,-3,-6,-2,-5,-4' })
+            ],
+            'array/sparse_table': [
+                ex('Range minimum', 'Preprocesses intervals and answers an O(1) range minimum query.', { values: '7,2,3,0,5,10,3,12,18', query_left: '1', query_right: '6', operation: 'min' }),
+                ex('Range maximum', 'Uses the same sparse table structure for a static range maximum query.', { values: '4,6,1,9,3,8,2', query_left: '2', query_right: '5', operation: 'max' })
             ]
         };
     }
@@ -1797,6 +1979,8 @@ class AlgorithmPanel {
         const search = document.getElementById('log-search');
         const phase = document.getElementById('log-phase-filter');
         const clear = document.getElementById('btn-clear-log-filter');
+        const copy = document.getElementById('btn-copy-log');
+        const exportLog = document.getElementById('btn-export-log');
 
         if (search) {
             search.addEventListener('input', (e) => {
@@ -1819,7 +2003,22 @@ class AlgorithmPanel {
             });
         }
 
+        if (copy) {
+            copy.addEventListener('click', () => this._copyFilteredLog());
+        }
+
+        if (exportLog) {
+            exportLog.addEventListener('click', () => this._exportFilteredLog());
+        }
+
         this._applyLogFilters();
+    }
+
+    _setupRunHistory() {
+        const save = document.getElementById('btn-save-run');
+        if (save) {
+            save.addEventListener('click', () => this._saveCurrentRunRecord());
+        }
     }
 
     _resetLogFilters() {
@@ -1954,6 +2153,7 @@ class AlgorithmPanel {
             this._syncTimelineUI();
         }
         this._renderRunSummary();
+        this._renderRunHistory();
 
         this._setStatus('replay', 'Imported');
         showToast('Run record imported', 'success');
@@ -2187,6 +2387,7 @@ class AlgorithmPanel {
             this._setStatus('finished', 'Finished');
             this._updateButtonStates();
             this._syncTimelineUI();
+            this._renderRunHistory();
             this._appendToLog('Algorithm completed!', 'result');
             showToast('Algorithm finished!', 'success');
         });
@@ -2246,6 +2447,7 @@ class AlgorithmPanel {
         this._clearStepDetail();
         this._renderRunSummary();
         this._syncTimelineUI();
+        this._renderRunHistory();
     }
 
     _clearTimeline() {
@@ -2266,6 +2468,7 @@ class AlgorithmPanel {
         this._clearStepDetail();
         this._clearRunSummary();
         this._syncTimelineUI();
+        this._renderRunHistory();
     }
 
     _createEmptyRunMetrics() {
@@ -2590,6 +2793,7 @@ class AlgorithmPanel {
         });
 
         if (exportBtn) exportBtn.disabled = !canReview;
+        this._renderRunHistory();
 
         const startBtn = document.getElementById('btn-timeline-start');
         const prevBtn = document.getElementById('btn-timeline-prev');
@@ -2613,16 +2817,11 @@ class AlgorithmPanel {
         if (bookmarkToggleIcon) bookmarkToggleIcon.textContent = isBookmarked ? '★' : '☆';
     }
 
-    _exportRun() {
-        if (!this._timelineCanReview()) {
-            showToast('Run export is available after an algorithm completes', 'error');
-            return;
-        }
-
+    _createRunRecordPayload() {
         const steps = this.timeline.steps.map(step => JSON.parse(JSON.stringify(step)));
         const finalStep = steps.length ? steps[steps.length - 1] : null;
         const algo = this._findAlgorithmByKey(this.selectedAlgorithm);
-        const payload = {
+        return {
             schema: 'visual-algorithm-run-v1',
             exported_at: new Date().toISOString(),
             algorithm_key: this.timeline.algorithmKey || this.selectedAlgorithm,
@@ -2637,6 +2836,15 @@ class AlgorithmPanel {
             final_state: finalStep ? (finalStep.state || null) : null,
             steps
         };
+    }
+
+    _exportRun() {
+        if (!this._timelineCanReview()) {
+            showToast('Run export is available after an algorithm completes', 'error');
+            return;
+        }
+
+        const payload = this._createRunRecordPayload();
 
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -2651,6 +2859,94 @@ class AlgorithmPanel {
         showToast('Run exported', 'success');
     }
 
+    _saveCurrentRunRecord() {
+        if (!this._timelineCanReview()) {
+            showToast('Run records are available after an algorithm completes', 'error');
+            return;
+        }
+
+        const payload = this._createRunRecordPayload();
+        const savedAt = new Date().toISOString();
+        const label = `${this._formatStateKey(payload.algorithm_key || 'algorithm')} - ${payload.step_count} steps`;
+        const record = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            saved_at: savedAt,
+            label,
+            record: payload
+        };
+
+        this.savedRunRecords = [
+            record,
+            ...this.savedRunRecords
+        ].slice(0, 10);
+        this._storeSavedRunRecords();
+        this._renderRunHistory();
+        showToast('Run record saved', 'success');
+    }
+
+    _deleteSavedRunRecord(id) {
+        this.savedRunRecords = this.savedRunRecords.filter(item => item.id !== id);
+        this._storeSavedRunRecords();
+        this._renderRunHistory();
+    }
+
+    _renderRunHistory() {
+        const list = document.getElementById('run-history-list');
+        const save = document.getElementById('btn-save-run');
+        if (!list) return;
+
+        if (save) save.disabled = !this._timelineCanReview();
+        list.innerHTML = '';
+
+        const records = Array.isArray(this.savedRunRecords) ? this.savedRunRecords : [];
+        if (records.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'run-history-empty';
+            empty.textContent = 'No saved runs';
+            list.appendChild(empty);
+            return;
+        }
+
+        records.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'run-history-item';
+
+            const load = document.createElement('button');
+            load.type = 'button';
+            load.className = 'run-history-load';
+            load.dataset.recordId = item.id || '';
+            const stepCount = item.record ? (item.record.step_count || (item.record.steps || []).length || 0) : 0;
+            const savedDate = item.saved_at ? new Date(item.saved_at) : null;
+            const savedLabel = savedDate && !Number.isNaN(savedDate.getTime())
+                ? savedDate.toLocaleString()
+                : 'saved run';
+
+            const title = document.createElement('span');
+            title.className = 'run-history-name';
+            title.textContent = item.label || this._formatStateKey(item.record && item.record.algorithm_key || 'algorithm');
+
+            const meta = document.createElement('span');
+            meta.className = 'run-history-meta';
+            meta.textContent = `${stepCount} steps - ${savedLabel}`;
+
+            load.appendChild(title);
+            load.appendChild(meta);
+            load.addEventListener('click', () => this.loadRunRecord(item.record));
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'run-history-delete';
+            remove.textContent = 'x';
+            remove.title = 'Delete saved run';
+            remove.setAttribute('aria-label', `Delete ${title.textContent}`);
+            remove.addEventListener('click', () => this._deleteSavedRunRecord(item.id));
+
+            row.appendChild(load);
+            row.appendChild(remove);
+            list.appendChild(row);
+        });
+    }
+
     _renderTimelineIndex(index) {
         if (!this._timelineCanReview() || !this.timeline.baseGraph) return;
 
@@ -2658,7 +2954,10 @@ class AlgorithmPanel {
         this.timeline.currentIndex = bounded;
 
         this.editor.lockLayout();
-        this.editor.restoreSnapshot(this.timeline.baseGraph, { save: false });
+        const baseViewport = this.timeline.baseGraph.viewport
+            ? JSON.parse(JSON.stringify(this.timeline.baseGraph.viewport))
+            : null;
+        this.editor.restoreSnapshot(this.timeline.baseGraph, { save: false, viewport: false });
         this.visualizer.storeOriginalLabels();
 
         for (let i = 0; i < bounded; i++) {
@@ -2673,6 +2972,10 @@ class AlgorithmPanel {
         }
 
         this.editor.setMode('view');
+        if (baseViewport) {
+            this.editor.restoreViewport(baseViewport);
+            requestAnimationFrame(() => this.editor.restoreViewport(baseViewport));
+        }
         this._setStatus('replay', bounded === this.timeline.steps.length ? 'Replay End' : 'Replaying');
         this._renderStepDetail(currentStep, bounded, this.timeline.steps.length);
         this._highlightTimelineLog(bounded - 1);
@@ -2730,13 +3033,31 @@ class AlgorithmPanel {
 
         content.innerHTML = '';
         const previousState = this.lastRenderedState || {};
-        const changedKeys = [];
-        Object.entries(state).forEach(([key, value]) => {
+        const hasPreviousState = !!this.lastRenderedState;
+        const entries = Object.entries(state);
+        const changes = [];
+
+        entries.forEach(([key, value]) => {
+            const hadPreviousValue = Object.prototype.hasOwnProperty.call(previousState, key);
+            if (hasPreviousState && (!hadPreviousValue || this._stateValueChanged(previousState[key], value))) {
+                changes.push({
+                    key,
+                    previous: hadPreviousValue ? previousState[key] : undefined,
+                    current: value,
+                    isNew: !hadPreviousValue
+                });
+            }
+        });
+
+        if (changes.length > 0) {
+            content.appendChild(this._renderStateDiffDetail(changes));
+        }
+
+        entries.forEach(([key, value]) => {
             const section = document.createElement('div');
             section.className = 'state-section';
-            if (this._stateValueChanged(previousState[key], value)) {
+            if (changes.some(change => change.key === key)) {
                 section.classList.add('changed');
-                changedKeys.push(key);
             }
 
             const label = document.createElement('div');
@@ -2748,27 +3069,65 @@ class AlgorithmPanel {
             content.appendChild(section);
         });
 
-        this._renderStateDiffSummary(changedKeys);
+        this._renderStateDiffSummary(changes);
         this.lastRenderedState = this._cloneState(state);
         panel.style.display = 'flex';
     }
 
-    _renderStateDiffSummary(changedKeys = []) {
+    _renderStateDiffSummary(changes = []) {
         const summary = document.getElementById('state-diff-summary');
         if (!summary) return;
 
-        if (!changedKeys.length) {
+        if (!changes.length) {
             summary.textContent = '';
             summary.title = '';
             return;
         }
 
-        const labels = changedKeys.map(key => this._formatStateKey(key));
+        const labels = changes.map(change => this._formatStateKey(change.key));
         const visible = labels.slice(0, 3);
         const extra = labels.length - visible.length;
         const text = `Changed: ${visible.join(', ')}${extra > 0 ? ` +${extra}` : ''}`;
         summary.textContent = text;
         summary.title = `Changed fields: ${labels.join(', ')}`;
+    }
+
+    _renderStateDiffDetail(changes = []) {
+        const detail = document.createElement('div');
+        detail.className = 'state-diff-detail';
+
+        changes.slice(0, 6).forEach(change => {
+            const row = document.createElement('div');
+            row.className = 'state-diff-row';
+
+            const key = document.createElement('span');
+            key.className = 'state-diff-key';
+            key.textContent = this._formatStateKey(change.key);
+
+            const before = document.createElement('span');
+            before.className = 'state-diff-before';
+            before.textContent = `Before: ${change.isNew ? 'new' : this._formatInlineStateValue(change.previous)}`;
+            before.title = before.textContent;
+
+            const after = document.createElement('span');
+            after.className = 'state-diff-after';
+            after.textContent = `After: ${this._formatInlineStateValue(change.current)}`;
+            after.title = after.textContent;
+
+            row.appendChild(key);
+            row.appendChild(before);
+            row.appendChild(after);
+            detail.appendChild(row);
+        });
+
+        if (changes.length > 6) {
+            const more = document.createElement('div');
+            more.className = 'state-diff-more';
+            more.textContent = `+${changes.length - 6} more changes`;
+            detail.appendChild(more);
+        }
+
+        return detail;
     }
 
     _renderStateValue(key, value, depth = 0) {
@@ -3247,6 +3606,71 @@ class AlgorithmPanel {
         if (log) log.innerHTML = '';
         if (resetFilters) this._resetLogFilters();
         this._applyLogFilters();
+    }
+
+    _getFilteredLogEntries() {
+        const log = document.getElementById('step-log-content');
+        if (!log) return [];
+        return [...log.querySelectorAll('.log-entry')].filter(entry => !entry.hidden);
+    }
+
+    _formatLogEntries(entries) {
+        return entries.map(entry => {
+            const phase = entry.dataset.phase || 'info';
+            const message = entry.querySelector('.log-msg')?.textContent || entry.textContent || '';
+            const stepIndex = Number(entry.dataset.stepIndex);
+            const prefix = Number.isInteger(stepIndex) ? `#${stepIndex + 1} ` : '';
+            return `${prefix}[${phase}] ${message.trim()}`.trim();
+        }).join('\n');
+    }
+
+    async _copyFilteredLog() {
+        const entries = this._getFilteredLogEntries();
+        if (!entries.length) {
+            showToast('No log entries to copy', 'error');
+            return;
+        }
+
+        const text = this._formatLogEntries(entries);
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                textarea.remove();
+            }
+            showToast('Log copied', 'success');
+        } catch (e) {
+            showToast('Could not copy log', 'error');
+        }
+    }
+
+    _exportFilteredLog() {
+        const entries = this._getFilteredLogEntries();
+        if (!entries.length) {
+            showToast('No log entries to export', 'error');
+            return;
+        }
+
+        const text = this._formatLogEntries(entries);
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeKey = String(this.timeline.algorithmKey || this.selectedAlgorithm || 'algorithm').replace(/[^a-z0-9_-]+/gi, '-');
+        link.href = url;
+        link.download = `${safeKey}-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showToast('Log exported', 'success');
     }
 
     _applyLogFilters() {

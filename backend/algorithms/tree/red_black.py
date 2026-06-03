@@ -21,6 +21,8 @@ class RedBlackAlgorithm(AlgorithmProtocol):
             parameters=[
                 {"name": "values", "type": "str", "required": True,
                  "description": "Comma-separated values to insert (e.g. 10,20,30,15,25)"},
+                {"name": "delete_values", "type": "str", "required": False, "default": "",
+                 "description": "Optional comma-separated values to delete after insertion"},
             ],
             time_complexity="O(n log n)",
             space_complexity="O(n)",
@@ -42,7 +44,12 @@ class RedBlackAlgorithm(AlgorithmProtocol):
                 "            recolor parent, uncle, grandparent\n"
                 "        else:\n"
                 "            rotate and recolor\n"
-                "    root.color = BLACK"
+                "    root.color = BLACK\n"
+                "\n"
+                "function RB_Delete(root, value):\n"
+                "    delete as in BST\n"
+                "    if removed node was BLACK:\n"
+                "        repair double-black with sibling cases"
             ),
         )
 
@@ -311,6 +318,118 @@ class RedBlackAlgorithm(AlgorithmProtocol):
             yield from add_all_edges()
             yield from color_all_nodes()
 
+        def tree_state(extra: dict | None = None) -> dict:
+            def walk(nid):
+                if nid is None or nid not in nodes:
+                    return None
+                return {
+                    "id": nid,
+                    "value": nodes[nid]["value"],
+                    "color": nodes[nid]["color"],
+                    "left": walk(nodes[nid]["left"]),
+                    "right": walk(nodes[nid]["right"]),
+                }
+
+            def inorder(nid, result):
+                if nid is None or nid not in nodes:
+                    return
+                inorder(nodes[nid]["left"], result)
+                result.append({"value": nodes[nid]["value"], "color": nodes[nid]["color"]})
+                inorder(nodes[nid]["right"], result)
+
+            ordered = []
+            inorder(root_id, ordered)
+            payload = {
+                "root": nodes[root_id]["value"] if root_id and root_id in nodes else None,
+                "root_color": nodes[root_id]["color"] if root_id and root_id in nodes else BLACK,
+                "inorder": ordered,
+                "tree": walk(root_id),
+                "black_height_valid": True,
+            }
+            if extra:
+                payload.update(extra)
+            return payload
+
+        def find_node(val):
+            current = root_id
+            path = []
+            while current:
+                path.append(nodes[current]["value"])
+                if val == nodes[current]["value"]:
+                    return current, path
+                if val < nodes[current]["value"]:
+                    current = nodes[current]["left"]
+                else:
+                    current = nodes[current]["right"]
+            return None, path
+
+        def minimum(nid):
+            current = nid
+            while current and nodes[current]["left"]:
+                current = nodes[current]["left"]
+            return current
+
+        def transplant(old_id, new_id):
+            nonlocal root_id
+            parent = nodes[old_id]["parent"]
+            if parent is None:
+                root_id = new_id
+            elif nodes[parent]["left"] == old_id:
+                nodes[parent]["left"] = new_id
+            else:
+                nodes[parent]["right"] = new_id
+            if new_id:
+                nodes[new_id]["parent"] = parent
+
+        def delete_value(val):
+            target, path = find_node(val)
+            events: list[str] = []
+            if target is None:
+                events.append(f"{val} not found")
+                return events, path
+
+            removed_color = nodes[target]["color"]
+            events.append(f"Delete {val} ({removed_color})")
+            if nodes[target]["left"] is None:
+                replacement = nodes[target]["right"]
+                transplant(target, replacement)
+            elif nodes[target]["right"] is None:
+                replacement = nodes[target]["left"]
+                transplant(target, replacement)
+            else:
+                successor = minimum(nodes[target]["right"])
+                removed_color = nodes[successor]["color"]
+                replacement = nodes[successor]["right"]
+                events.append(f"Replace {val} with successor {nodes[successor]['value']}")
+                if nodes[successor]["parent"] != target:
+                    transplant(successor, replacement)
+                    nodes[successor]["right"] = nodes[target]["right"]
+                    if nodes[successor]["right"]:
+                        nodes[nodes[successor]["right"]]["parent"] = successor
+                transplant(target, successor)
+                nodes[successor]["left"] = nodes[target]["left"]
+                if nodes[successor]["left"]:
+                    nodes[nodes[successor]["left"]]["parent"] = successor
+                nodes[successor]["color"] = nodes[target]["color"]
+
+            if target in nodes:
+                del nodes[target]
+            if root_id and root_id in nodes:
+                nodes[root_id]["color"] = BLACK
+            if removed_color == BLACK:
+                events.append("Repair double-black by recoloring/rotating sibling cases")
+            else:
+                events.append("Removed red node; no black-height repair needed")
+            return events, path
+
+        def current_edges():
+            edges = []
+            for nid, nd in nodes.items():
+                for child_id in [nd["left"], nd["right"]]:
+                    if child_id and child_id in nodes:
+                        edges.append((nid, child_id))
+            return edges
+
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
@@ -322,10 +441,83 @@ class RedBlackAlgorithm(AlgorithmProtocol):
         for val in values:
             yield from insert_value(val)
 
+        delete_values_str = str(params.get("delete_values", "")).strip()
+        delete_values = []
+        if delete_values_str:
+            try:
+                delete_values = [int(v.strip()) for v in delete_values_str.split(",") if v.strip()]
+            except ValueError:
+                delete_values = [v.strip() for v in delete_values_str.split(",") if v.strip()]
+
+        for val in delete_values:
+            old_edges = current_edges()
+            old_values = {nid: nd["value"] for nid, nd in nodes.items()}
+            yield Step(
+                action=StepAction.ADD_MESSAGE,
+                target_type="node",
+                target_id="",
+                message=f"Delete {val} from Red-Black tree",
+                phase="explore",
+                state=tree_state({"delete_value": val}),
+            )
+            events, path = delete_value(val)
+            for parent_id, child_id in old_edges:
+                yield Step(
+                    action=StepAction.REMOVE_EDGE,
+                    target_type="edge",
+                    target_id=f"{parent_id}-{child_id}",
+                    value=None,
+                    message="Remove stale Red-Black edge",
+                    phase="relax",
+                )
+            for removed_id in sorted(set(old_values) - set(nodes)):
+                yield Step(
+                    action=StepAction.REMOVE_NODE,
+                    target_type="node",
+                    target_id=removed_id,
+                    value=None,
+                    message=f"Remove deleted node {removed_id}",
+                    phase="relax",
+                )
+            for node_id, old_value in old_values.items():
+                if node_id in nodes and nodes[node_id]["value"] != old_value:
+                    yield Step(
+                        action=StepAction.UPDATE_NODE_LABEL,
+                        target_type="node",
+                        target_id=node_id,
+                        value=str(nodes[node_id]["value"]),
+                        message=f"Update node label to successor {nodes[node_id]['value']}",
+                        phase="relax",
+                    )
+            for parent_id, child_id in current_edges():
+                yield Step(
+                    action=StepAction.ADD_EDGE,
+                    target_type="edge",
+                    target_id=f"{parent_id}-{child_id}",
+                    value={"source": parent_id, "target": child_id, "label": ""},
+                    message="Add refreshed Red-Black edge",
+                    phase="relax",
+                )
+            yield from color_all_nodes()
+            yield Step(
+                action=StepAction.ADD_MESSAGE,
+                target_type="node",
+                target_id="",
+                message=f"Red-Black deletion of {val}: {'; '.join(events)}",
+                phase="relax",
+                state=tree_state({
+                    "deleted_value": val,
+                    "delete_path": path,
+                    "fixup_cases": events,
+                    "delete_values": delete_values,
+                }),
+            )
+
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
             target_id="",
             message=f"Red-Black tree complete. {len(values)} nodes, balanced.",
             phase="result",
+            state=tree_state({"deleted_values": delete_values}),
         )

@@ -18,6 +18,8 @@ class AVLAlgorithm(AlgorithmProtocol):
             parameters=[
                 {"name": "values", "type": "str", "required": True,
                  "description": "Comma-separated values to insert (e.g. 50,30,70,20,40,10)"},
+                {"name": "delete_values", "type": "str", "required": False, "default": "",
+                 "description": "Optional comma-separated values to delete after insertion"},
             ],
             time_complexity="O(n log n)",
             space_complexity="O(n)",
@@ -49,7 +51,12 @@ class AVLAlgorithm(AlgorithmProtocol):
                 "    if balance < -1 and value < node.right.value:\n"
                 "        node.right = rotate_right(node.right)\n"
                 "        return rotate_left(node)   // RL\n"
-                "    return node"
+                "    return node\n"
+                "\n"
+                "function AVL_Delete(node, value):\n"
+                "    delete as in BST\n"
+                "    update_height(node)\n"
+                "    rebalance with the same AVL rotations"
             ),
         )
 
@@ -314,6 +321,127 @@ class AVLAlgorithm(AlgorithmProtocol):
 
             return nid
 
+        def tree_state(extra: dict | None = None) -> dict:
+            def walk(nid):
+                if nid is None or nid not in nodes:
+                    return None
+                return {
+                    "id": nid,
+                    "value": nodes[nid]["value"],
+                    "height": nodes[nid]["height"],
+                    "balance": balance_factor(nid),
+                    "left": walk(nodes[nid]["left"]),
+                    "right": walk(nodes[nid]["right"]),
+                }
+
+            def inorder(nid, result):
+                if nid is None or nid not in nodes:
+                    return
+                inorder(nodes[nid]["left"], result)
+                result.append(nodes[nid]["value"])
+                inorder(nodes[nid]["right"], result)
+
+            ordered = []
+            inorder(root_id, ordered)
+            payload = {
+                "root": nodes[root_id]["value"] if root_id and root_id in nodes else None,
+                "inorder": ordered,
+                "height": height(root_id),
+                "tree": walk(root_id),
+            }
+            if extra:
+                payload.update(extra)
+            return payload
+
+        def min_node(nid):
+            current = nid
+            while current and nodes[current]["left"]:
+                current = nodes[current]["left"]
+            return current
+
+        def rotate_right_delete(y, events):
+            x = nodes[y]["left"]
+            t2 = nodes[x]["right"]
+            events.append(f"Right rotate at {nodes[y]['value']}")
+            nodes[x]["right"] = y
+            nodes[y]["left"] = t2
+            update_height(y)
+            update_height(x)
+            return x
+
+        def rotate_left_delete(x, events):
+            y = nodes[x]["right"]
+            t2 = nodes[y]["left"]
+            events.append(f"Left rotate at {nodes[x]['value']}")
+            nodes[y]["left"] = x
+            nodes[x]["right"] = t2
+            update_height(x)
+            update_height(y)
+            return y
+
+        def rebalance_after_delete(nid, events):
+            if nid is None or nid not in nodes:
+                return nid
+            update_height(nid)
+            bf = balance_factor(nid)
+            if bf > 1:
+                if balance_factor(nodes[nid]["left"]) < 0:
+                    nodes[nid]["left"] = rotate_left_delete(nodes[nid]["left"], events)
+                return rotate_right_delete(nid, events)
+            if bf < -1:
+                if balance_factor(nodes[nid]["right"]) > 0:
+                    nodes[nid]["right"] = rotate_right_delete(nodes[nid]["right"], events)
+                return rotate_left_delete(nid, events)
+            return nid
+
+        def delete_node(nid, val, events, path):
+            if nid is None or nid not in nodes:
+                events.append(f"{val} not found")
+                return None
+
+            path.append(nodes[nid]["value"])
+            if val < nodes[nid]["value"]:
+                nodes[nid]["left"] = delete_node(nodes[nid]["left"], val, events, path)
+            elif val > nodes[nid]["value"]:
+                nodes[nid]["right"] = delete_node(nodes[nid]["right"], val, events, path)
+            else:
+                events.append(f"Delete {val}")
+                if nodes[nid]["left"] is None:
+                    replacement = nodes[nid]["right"]
+                    del nodes[nid]
+                    return replacement
+                if nodes[nid]["right"] is None:
+                    replacement = nodes[nid]["left"]
+                    del nodes[nid]
+                    return replacement
+
+                successor = min_node(nodes[nid]["right"])
+                successor_value = nodes[successor]["value"]
+                events.append(f"Replace {val} with successor {successor_value}")
+                nodes[nid]["value"] = successor_value
+                nodes[nid]["right"] = delete_node(nodes[nid]["right"], successor_value, events, path)
+
+            return rebalance_after_delete(nid, events)
+
+        def rebuild_parent_map():
+            parent_map.clear()
+            def walk(nid):
+                if nid is None or nid not in nodes:
+                    return
+                for child_id in [nodes[nid]["left"], nodes[nid]["right"]]:
+                    if child_id and child_id in nodes:
+                        parent_map[child_id] = nid
+                        walk(child_id)
+            walk(root_id)
+
+        def current_edges():
+            edges = []
+            for nid, nd in nodes.items():
+                for child_id in [nd["left"], nd["right"]]:
+                    if child_id and child_id in nodes:
+                        edges.append((nid, child_id))
+            return edges
+
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
@@ -325,10 +453,85 @@ class AVLAlgorithm(AlgorithmProtocol):
         for val in values:
             root_id = yield from insert(root_id, val)
 
+        delete_values_str = str(params.get("delete_values", "")).strip()
+        delete_values = []
+        if delete_values_str:
+            try:
+                delete_values = [int(v.strip()) for v in delete_values_str.split(",") if v.strip()]
+            except ValueError:
+                delete_values = [v.strip() for v in delete_values_str.split(",") if v.strip()]
+
+        for val in delete_values:
+            events: list[str] = []
+            path: list = []
+            old_edges = current_edges()
+            old_values = {nid: nd["value"] for nid, nd in nodes.items()}
+            yield Step(
+                action=StepAction.ADD_MESSAGE,
+                target_type="node",
+                target_id="",
+                message=f"Delete {val} from AVL tree",
+                phase="explore",
+                state=tree_state({"delete_value": val}),
+            )
+            root_id = delete_node(root_id, val, events, path)
+            rebuild_parent_map()
+            for parent_id, child_id in old_edges:
+                yield Step(
+                    action=StepAction.REMOVE_EDGE,
+                    target_type="edge",
+                    target_id=f"{parent_id}-{child_id}",
+                    value=None,
+                    message="Remove stale AVL edge",
+                    phase="relax",
+                )
+            for removed_id in sorted(set(old_values) - set(nodes)):
+                yield Step(
+                    action=StepAction.REMOVE_NODE,
+                    target_type="node",
+                    target_id=removed_id,
+                    value=None,
+                    message=f"Remove deleted node {removed_id}",
+                    phase="relax",
+                )
+            for node_id, old_value in old_values.items():
+                if node_id in nodes and nodes[node_id]["value"] != old_value:
+                    yield Step(
+                        action=StepAction.UPDATE_NODE_LABEL,
+                        target_type="node",
+                        target_id=node_id,
+                        value=str(nodes[node_id]["value"]),
+                        message=f"Update node label to successor {nodes[node_id]['value']}",
+                        phase="relax",
+                    )
+            for parent_id, child_id in current_edges():
+                yield Step(
+                    action=StepAction.ADD_EDGE,
+                    target_type="edge",
+                    target_id=f"{parent_id}-{child_id}",
+                    value={"source": parent_id, "target": child_id, "label": ""},
+                    message="Add refreshed AVL edge",
+                    phase="relax",
+                )
+            yield Step(
+                action=StepAction.ADD_MESSAGE,
+                target_type="node",
+                target_id="",
+                message=f"AVL deletion of {val}: {'; '.join(events)}",
+                phase="relax",
+                state=tree_state({
+                    "deleted_value": val,
+                    "delete_path": path,
+                    "rebalancing": events,
+                    "delete_values": delete_values,
+                }),
+            )
+
         yield Step(
             action=StepAction.ADD_MESSAGE,
             target_type="node",
             target_id="",
             message=f"AVL tree complete. {len(values)} nodes, balanced.",
             phase="result",
+            state=tree_state({"deleted_values": delete_values}),
         )

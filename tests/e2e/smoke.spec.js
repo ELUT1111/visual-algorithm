@@ -5,7 +5,7 @@ test('shows algorithm overview and filters by learning path', async ({ page }) =
   await page.goto('/');
 
   await expect(page.locator('#algorithm-overview')).toContainText('Total');
-  await expect(page.locator('#algorithm-overview')).toContainText('53');
+  await expect(page.locator('#algorithm-overview')).toContainText('66');
   await expect(page.locator('#learning-paths')).toContainText('DP Foundations');
 
   await page.locator('.learning-path', { hasText: 'DP Foundations' }).click();
@@ -71,6 +71,9 @@ test('pins favorite algorithms and keeps recent selections', async ({ page }) =>
 });
 
 test('loads, searches, runs an array algorithm, replays timeline, exports and imports run JSON', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem('val_savedRunRecords');
+  });
   await page.goto('/');
 
   await expect(page.locator('#algorithm-list .algo-card').first()).toBeVisible();
@@ -136,6 +139,14 @@ test('loads, searches, runs an array algorithm, replays timeline, exports and im
   await expect(page.locator('#log-search')).toHaveValue('');
   await expect(page.locator('#log-phase-filter')).toHaveValue('all');
 
+  const logDownloadPromise = page.waitForEvent('download');
+  await page.locator('#btn-export-log').click();
+  const logDownload = await logDownloadPromise;
+  expect(logDownload.suggestedFilename()).toContain('log');
+  const logPath = await logDownload.path();
+  const exportedLog = fs.readFileSync(logPath, 'utf8');
+  expect(exportedLog).toContain('[');
+
   await page.locator('#btn-timeline-start').click();
   await expect(page.locator('#timeline-label')).toHaveText(/^0 \/ \d+$/);
   await page.locator('#btn-timeline-next').click();
@@ -166,9 +177,23 @@ test('loads, searches, runs an array algorithm, replays timeline, exports and im
   expect(exported.run_metrics.message_count).toBeGreaterThan(0);
   expect(exported.bookmarks).toEqual([3]);
 
+  await expect(page.locator('#btn-save-run')).toBeEnabled();
+  await page.locator('#btn-save-run').click();
+  await expect(page.locator('#run-history-list .run-history-item')).toBeVisible();
+  await expect(page.locator('#run-history-list')).toContainText('array/binary search');
+
   await page.locator('#btn-reset').click();
   await expect(page.locator('#status-badge')).toHaveText('Ready');
   await expect(page.locator('#run-summary')).toBeHidden();
+  await expect(page.locator('#btn-save-run')).toBeDisabled();
+
+  await page.locator('#run-history-list .run-history-load').first().click();
+  await expect(page.locator('#status-badge')).toHaveText('Imported');
+  await expect(page.locator('#param-values')).toHaveValue('1,2,4,5,8,12,16');
+  await expect(page.locator('#param-target')).toHaveValue('8');
+  await expect(page.locator('#timeline-slider')).toBeEnabled();
+
+  await page.locator('#btn-reset').click();
 
   const fileChooserPromise = page.waitForEvent('filechooser');
   await page.locator('#btn-import').click();
@@ -359,6 +384,9 @@ test('runs a max-flow example and shows residual-network state', async ({ page }
   }
   await expect(page.locator('.state-section.changed').first()).toBeVisible();
   await expect(page.locator('#state-diff-summary')).toContainText('Changed:');
+  await expect(page.locator('.state-diff-detail')).toBeVisible();
+  await expect(page.locator('.state-diff-detail')).toContainText('Before:');
+  await expect(page.locator('.state-diff-detail')).toContainText('After:');
 });
 
 test('compares max-flow algorithms on the same capacity network', async ({ page }) => {
@@ -461,6 +489,409 @@ test('runs fenwick tree and shows prefix query state', async ({ page }) => {
   await expect(page.locator('#state-content')).toContainText('prefix sum');
   await expect(page.locator('#state-content')).toContainText('query path');
   await expect(page.locator('#state-content')).toContainText('tree');
+});
+
+test('runs sparse table and shows O(1) range query state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('sparse_table');
+  await page.locator('.algo-card[data-key="array/sparse_table"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Range minimum' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-values')).toHaveValue('7,2,3,0,5,10,3,12,18');
+  await expect(page.locator('#param-query_left')).toHaveValue('1');
+  await expect(page.locator('#param-query_right')).toHaveValue('6');
+  await expect(page.locator('#param-operation')).toHaveValue('min');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('sparse table');
+  await expect(page.locator('#state-content')).toContainText('log table');
+  await expect(page.locator('#state-content')).toContainText('query blocks');
+  await expect(page.locator('#state-content')).toContainText('query result');
+});
+
+test('runs segment tree and shows range query state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('segment_tree');
+  await page.locator('.algo-card[data-key="tree/segment_tree"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Range sum' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-values')).toHaveValue('2,1,5,3,4,7');
+  await expect(page.locator('#param-query_left')).toHaveValue('1');
+  await expect(page.locator('#param-query_right')).toHaveValue('4');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('range sum');
+  await expect(page.locator('#state-content')).toContainText('accepted nodes');
+  await expect(page.locator('#state-content')).toContainText('query range');
+});
+
+test('runs lca and shows ancestor table state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('lca');
+  await page.locator('.algo-card[data-key="tree/lca"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Sibling leaves' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('A');
+  await expect(page.locator('#param-node_a')).toHaveValue('D');
+  await expect(page.locator('#param-node_b')).toHaveValue('E');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('lca');
+  await expect(page.locator('#state-content')).toContainText('ancestor table');
+  await expect(page.locator('#state-content')).toContainText('lca path');
+  await expect(page.locator('#state-content')).toContainText('lift trace');
+});
+
+test('runs heavy-light decomposition and shows path segments', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('heavy_light');
+  await page.locator('.algo-card[data-key="tree/heavy_light_decomposition"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Path sum' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('A');
+  await expect(page.locator('#param-node_a')).toHaveValue('D');
+  await expect(page.locator('#param-node_b')).toHaveValue('G');
+  await expect(page.locator('#param-values')).toHaveValue('1,2,3,4,5,6,7');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('heavy child');
+  await expect(page.locator('#state-content')).toContainText('path segments');
+  await expect(page.locator('#state-content')).toContainText('path query result');
+  await expect(page.locator('#state-content')).toContainText('base array');
+});
+
+test('runs trie deletion and shows prefix-count state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('trie');
+  await page.locator('.algo-card[data-key="tree/trie"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Delete and count' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-words')).toHaveValue('app,apple,apt,bat');
+  await expect(page.locator('#param-query_prefix')).toHaveValue('ap');
+  await expect(page.locator('#param-delete_words')).toHaveValue('app');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('prefix query result');
+  await expect(page.locator('#state-content')).toContainText('word frequency');
+  await expect(page.locator('#state-content')).toContainText('deleted words');
+  await expect(page.locator('#state-content')).toContainText('deletion results');
+});
+
+test('runs aho-corasick and shows failure-link state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('aho_corasick');
+  await page.locator('.algo-card[data-key="tree/aho_corasick"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Classic multi-match' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-patterns')).toHaveValue('he,she,his,hers');
+  await expect(page.locator('#param-text')).toHaveValue('ushers');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('failure links');
+  await expect(page.locator('#state-content')).toContainText('output table');
+  await expect(page.locator('#state-content')).toContainText('scan trace');
+  await expect(page.locator('#state-content')).toContainText('match count');
+});
+
+test('runs avl deletion and shows rebalancing state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('avl');
+  await page.locator('.algo-card[data-key="tree/avl"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Delete and rebalance' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-values')).toHaveValue('20,10,30,5,15,25,40,2,7');
+  await expect(page.locator('#param-delete_values')).toHaveValue('30,10');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('deleted values');
+  await expect(page.locator('#state-content')).toContainText('inorder');
+  await expect(page.locator('#state-content')).toContainText('tree');
+});
+
+test('runs red-black deletion and shows fix-up state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('red_black');
+  await page.locator('.algo-card[data-key="tree/red_black"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Delete fix-up' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-values')).toHaveValue('20,10,30,5,15,25,40,1,7');
+  await expect(page.locator('#param-delete_values')).toHaveValue('5,30');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('deleted values');
+  await expect(page.locator('#state-content')).toContainText('root color');
+  await expect(page.locator('#state-content')).toContainText('black height valid');
+});
+
+test('runs treap and shows rotation state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('treap');
+  await page.locator('.algo-card[data-key="tree/treap"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Priority rotations' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-values')).toHaveValue('50,30,70,20,40,60,80');
+  await expect(page.locator('#param-priorities')).toHaveValue('50,30,40,10,35,20,60');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('heap valid');
+  await expect(page.locator('#state-content')).toContainText('rotations');
+  await expect(page.locator('#state-content')).toContainText('inorder');
+});
+
+test('runs dag longest path and shows critical path state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('dag_longest_path');
+  await page.locator('.algo-card[data-key="graph/dag_longest_path"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Critical path' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('S');
+  await expect(page.locator('#param-target')).toHaveValue('T');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('critical path');
+  await expect(page.locator('#state-content')).toContainText('longest distance');
+  await expect(page.locator('#state-content')).toContainText('topological order');
+});
+
+test('runs euler path and shows edge-covering trail state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('euler_path');
+  await page.locator('.algo-card[data-key="graph/euler_path"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Euler trail' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-start')).toHaveValue('A');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('euler path');
+  await expect(page.locator('#state-content')).toContainText('euler edges');
+  await expect(page.locator('#state-content')).toContainText('used edge count');
+  await expect(page.locator('#state-content')).toContainText('edge count');
+});
+
+test('runs kruskal and shows union-find optimization state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('kruskal');
+  await page.locator('.algo-card[data-key="graph/kruskal"]').click();
+  await page.locator('.example-select').selectOption({ label: 'City MST' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('find traces');
+  await expect(page.locator('#state-content')).toContainText('compression updates');
+  await expect(page.locator('#state-content')).toContainText('union trace');
+  await expect(page.locator('#state-content')).toContainText('rank updates');
+});
+
+test('runs bridges articulation and shows biconnected components', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('bridges_articulation');
+  await page.locator('.algo-card[data-key="graph/bridges_articulation"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Chain bridges' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('bridges');
+  await expect(page.locator('#state-content')).toContainText('articulation points');
+  await expect(page.locator('#state-content')).toContainText('biconnected components');
+  await expect(page.locator('#state-content')).toContainText('component trace');
+});
+
+test('runs hopcroft-karp and shows matching state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('hopcroft_karp');
+  await page.locator('.algo-card[data-key="graph/hopcroft_karp"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Worker-task matching' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('matching size');
+  await expect(page.locator('#state-content')).toContainText('left partition');
+  await expect(page.locator('#state-content')).toContainText('right partition');
+});
+
+test('runs stoer-wagner and shows global min-cut state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('stoer_wagner');
+  await page.locator('.algo-card[data-key="graph/stoer_wagner"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Global min cut' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('best cut value');
+  await expect(page.locator('#state-content')).toContainText('min cut edges');
+  await expect(page.locator('#state-content')).toContainText('phase cuts');
+  await expect(page.locator('#state-content')).toContainText('contractions');
+});
+
+test('runs push-relabel and shows preflow state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('push_relabel');
+  await page.locator('.algo-card[data-key="graph/push_relabel"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Preflow network' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('S');
+  await expect(page.locator('#param-target')).toHaveValue('T');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('max flow');
+  await expect(page.locator('#state-content')).toContainText('heights');
+  await expect(page.locator('#state-content')).toContainText('excess');
+  await expect(page.locator('#state-content')).toContainText('push trace');
+  await expect(page.locator('#state-content')).toContainText('relabel trace');
+});
+
+test('runs min-cost max-flow and shows cost state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('min_cost_max_flow');
+  await page.locator('.algo-card[data-key="graph/min_cost_max_flow"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Costed network' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('S');
+  await expect(page.locator('#param-target')).toHaveValue('T');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('max flow');
+  await expect(page.locator('#state-content')).toContainText('min cost');
+  await expect(page.locator('#state-content')).toContainText('flow table');
+});
+
+test('runs hungarian assignment and shows minimum cost state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('hungarian');
+  await page.locator('.algo-card[data-key="dp/hungarian"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Worker assignment' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-costs')).toHaveValue('9,2,7;6,4,3;5,8,1');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('min cost');
+  await expect(page.locator('#state-content')).toContainText('assignment');
+  await expect(page.locator('#state-content')).toContainText('reduced matrix');
+});
+
+test('runs suffix array and shows suffix search state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('suffix_array');
+  await page.locator('.algo-card[data-key="string/suffix_array"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Banana search' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-text')).toHaveValue('banana');
+  await expect(page.locator('#param-pattern')).toHaveValue('ana');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('suffix array');
+  await expect(page.locator('#state-content')).toContainText('matches');
+  await expect(page.locator('#state-content')).toContainText('ranks');
 });
 
 test('runs manacher and shows palindrome radius state', async ({ page }) => {
