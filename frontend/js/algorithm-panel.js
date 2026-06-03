@@ -399,15 +399,24 @@ class AlgorithmPanel {
         const overrides = {
             'graph/topological_sort': ['graph', 'sorting', 'graph-structure'],
             'graph/dag_longest_path': ['graph', 'dp', 'shortest-path', 'graph-structure'],
+            'graph/dominator_tree': ['graph', 'graph-structure', 'data-structure'],
+            'graph/directed_mst': ['graph', 'mst', 'graph-structure'],
+            'graph/yen_k_shortest_paths': ['graph', 'shortest-path', 'graph-structure'],
+            'graph/suurballe_disjoint_paths': ['graph', 'shortest-path', 'graph-structure'],
+            'graph/karp_minimum_mean_cycle': ['graph', 'graph-structure', 'dp'],
+            'graph/minimum_cycle_basis': ['graph', 'graph-structure', 'data-structure'],
             'graph/euler_path': ['graph', 'graph-structure'],
             'array/kadane': ['array', 'dp', 'dp-table'],
             'array/sparse_table': ['array', 'data-structure'],
+            'graph/blossom_matching': ['graph', 'graph-structure', 'matching'],
             'graph/hopcroft_karp': ['graph', 'graph-structure', 'matching'],
             'graph/min_cost_max_flow': ['graph', 'flow', 'shortest-path'],
             'graph/push_relabel': ['graph', 'flow'],
+            'graph/gomory_hu_tree': ['graph', 'graph-structure', 'flow'],
             'graph/stoer_wagner': ['graph', 'graph-structure'],
             'dp/hungarian': ['dp', 'matching', 'dp-table'],
             'string/suffix_array': ['string', 'matching', 'data-structure'],
+            'string/suffix_automaton': ['string', 'matching', 'data-structure'],
             'tree/lca': ['tree', 'search', 'data-structure'],
             'tree/heavy_light_decomposition': ['tree', 'data-structure'],
             'tree/aho_corasick': ['tree', 'string', 'matching', 'data-structure'],
@@ -1053,12 +1062,20 @@ class AlgorithmPanel {
                     'graph/floyd_warshall',
                     'graph/spfa',
                     'graph/johnson',
+                    'graph/dominator_tree',
+                    'graph/directed_mst',
+                    'graph/yen_k_shortest_paths',
+                    'graph/suurballe_disjoint_paths',
+                    'graph/karp_minimum_mean_cycle',
+                    'graph/minimum_cycle_basis',
                     'graph/edmonds_karp',
                     'graph/dinic',
                     'graph/push_relabel',
                     'graph/min_cost_max_flow',
                     'graph/hopcroft_karp',
-                    'graph/stoer_wagner'
+                    'graph/blossom_matching',
+                    'graph/stoer_wagner',
+                    'graph/gomory_hu_tree'
                 ]
             },
             {
@@ -1088,7 +1105,8 @@ class AlgorithmPanel {
                     'string/boyer_moore',
                     'string/z_algorithm',
                     'string/manacher',
-                    'string/suffix_array'
+                    'string/suffix_array',
+                    'string/suffix_automaton'
                 ]
             },
             {
@@ -1244,6 +1262,26 @@ class AlgorithmPanel {
             ]
         };
 
+        const blossomGraph = {
+            name: 'General Matching Blossom',
+            description: 'Non-bipartite graph where an odd cycle is contracted as a blossom',
+            directed: false,
+            nodes: [
+                { id: 'A', label: 'A', x: -120, y: -120 },
+                { id: 'B', label: 'B', x: 80, y: -120 },
+                { id: 'C', label: 'C', x: -20, y: 20 },
+                { id: 'D', label: 'D', x: -240, y: 70 },
+                { id: 'E', label: 'E', x: 200, y: 70 }
+            ],
+            edges: [
+                { source: 'A', target: 'B', weight: 1, label: '' },
+                { source: 'B', target: 'C', weight: 1, label: '' },
+                { source: 'C', target: 'A', weight: 1, label: '' },
+                { source: 'A', target: 'D', weight: 1, label: '' },
+                { source: 'B', target: 'E', weight: 1, label: '' }
+            ]
+        };
+
         const costFlowNetwork = {
             name: 'Costed Flow Network',
             description: 'Directed network with capacity and cost metadata',
@@ -1283,6 +1321,120 @@ class AlgorithmPanel {
                 { source: 'C', target: 'E', weight: 1, label: '1' },
                 { source: 'D', target: 'F', weight: 1, label: '1' },
                 { source: 'E', target: 'F', weight: 5, label: '5' }
+            ]
+        };
+
+        const controlFlowGraph = {
+            name: 'Control Flow Graph',
+            description: 'Directed CFG with joins for dominator and dominance-frontier analysis',
+            directed: true,
+            root_id: 'S',
+            nodes: [
+                { id: 'S', label: 'S', x: -260, y: 0 },
+                { id: 'A', label: 'A', x: -120, y: -100 },
+                { id: 'B', label: 'B', x: -120, y: 100 },
+                { id: 'C', label: 'C', x: 40, y: 0 },
+                { id: 'D', label: 'D', x: 180, y: -90 },
+                { id: 'E', label: 'E', x: 180, y: 90 },
+                { id: 'T', label: 'T', x: 320, y: 0 }
+            ],
+            edges: [
+                { source: 'S', target: 'A', weight: 1, label: '', directed: true },
+                { source: 'S', target: 'B', weight: 1, label: '', directed: true },
+                { source: 'A', target: 'C', weight: 1, label: '', directed: true },
+                { source: 'B', target: 'C', weight: 1, label: '', directed: true },
+                { source: 'C', target: 'D', weight: 1, label: '', directed: true },
+                { source: 'C', target: 'E', weight: 1, label: '', directed: true },
+                { source: 'D', target: 'T', weight: 1, label: '', directed: true },
+                { source: 'E', target: 'T', weight: 1, label: '', directed: true }
+            ]
+        };
+
+        const directedMstGraph = {
+            name: 'Directed Arborescence',
+            description: 'Rooted directed graph where Edmonds contracts a selected incoming-edge cycle',
+            directed: true,
+            root_id: 'R',
+            nodes: [
+                { id: 'R', label: 'R', x: -260, y: 0 },
+                { id: 'A', label: 'A', x: -90, y: -120 },
+                { id: 'B', label: 'B', x: 70, y: -20 },
+                { id: 'C', label: 'C', x: -20, y: 130 },
+                { id: 'D', label: 'D', x: 240, y: 70 }
+            ],
+            edges: [
+                { source: 'R', target: 'A', weight: 4, label: '4', directed: true },
+                { source: 'R', target: 'B', weight: 6, label: '6', directed: true },
+                { source: 'R', target: 'D', weight: 10, label: '10', directed: true },
+                { source: 'A', target: 'B', weight: 1, label: '1', directed: true },
+                { source: 'B', target: 'C', weight: 1, label: '1', directed: true },
+                { source: 'C', target: 'A', weight: 1, label: '1', directed: true },
+                { source: 'C', target: 'D', weight: 1, label: '1', directed: true },
+                { source: 'A', target: 'D', weight: 4, label: '4', directed: true }
+            ]
+        };
+
+        const kShortestGraph = {
+            name: 'Alternative Routes',
+            description: 'Directed weighted graph with several near-shortest simple paths',
+            directed: true,
+            nodes: [
+                { id: 'S', label: 'S', x: -260, y: 0 },
+                { id: 'A', label: 'A', x: -100, y: -120 },
+                { id: 'B', label: 'B', x: -100, y: 120 },
+                { id: 'C', label: 'C', x: 80, y: -40 },
+                { id: 'D', label: 'D', x: 80, y: 120 },
+                { id: 'T', label: 'T', x: 260, y: 0 }
+            ],
+            edges: [
+                { source: 'S', target: 'A', weight: 1, label: '1', directed: true },
+                { source: 'S', target: 'B', weight: 1, label: '1', directed: true },
+                { source: 'A', target: 'C', weight: 1, label: '1', directed: true },
+                { source: 'B', target: 'C', weight: 1, label: '1', directed: true },
+                { source: 'A', target: 'D', weight: 2, label: '2', directed: true },
+                { source: 'B', target: 'D', weight: 2, label: '2', directed: true },
+                { source: 'C', target: 'T', weight: 1, label: '1', directed: true },
+                { source: 'D', target: 'T', weight: 1, label: '1', directed: true },
+                { source: 'C', target: 'D', weight: 1, label: '1', directed: true }
+            ]
+        };
+
+        const meanCycleGraph = {
+            name: 'Minimum Mean Cycle',
+            description: 'Directed weighted graph where a short low-cost cycle has the smallest average weight',
+            directed: true,
+            nodes: [
+                { id: 'A', label: 'A', x: -180, y: -100 },
+                { id: 'B', label: 'B', x: 20, y: -140 },
+                { id: 'C', label: 'C', x: 120, y: 10 },
+                { id: 'D', label: 'D', x: -40, y: 120 }
+            ],
+            edges: [
+                { source: 'A', target: 'B', weight: 4, label: '4', directed: true },
+                { source: 'B', target: 'C', weight: 4, label: '4', directed: true },
+                { source: 'C', target: 'A', weight: 4, label: '4', directed: true },
+                { source: 'C', target: 'D', weight: 1, label: '1', directed: true },
+                { source: 'D', target: 'C', weight: 1, label: '1', directed: true },
+                { source: 'A', target: 'D', weight: 6, label: '6', directed: true }
+            ]
+        };
+
+        const cycleBasisGraph = {
+            name: 'Cycle Basis Grid',
+            description: 'Undirected weighted square with a diagonal, producing two independent light cycles',
+            directed: false,
+            nodes: [
+                { id: 'A', label: 'A', x: -160, y: -120 },
+                { id: 'B', label: 'B', x: 120, y: -120 },
+                { id: 'C', label: 'C', x: 120, y: 120 },
+                { id: 'D', label: 'D', x: -160, y: 120 }
+            ],
+            edges: [
+                { source: 'A', target: 'B', weight: 1, label: '1' },
+                { source: 'B', target: 'C', weight: 1, label: '1' },
+                { source: 'C', target: 'D', weight: 1, label: '1' },
+                { source: 'D', target: 'A', weight: 1, label: '1' },
+                { source: 'A', target: 'C', weight: 1, label: '1' }
             ]
         };
 
@@ -1350,8 +1502,14 @@ class AlgorithmPanel {
             'graph/hopcroft_karp': [
                 ex('Worker-task matching', 'Loads a bipartite graph with three possible matches.', {}, null, matchingGraph)
             ],
+            'graph/blossom_matching': [
+                ex('Odd-cycle blossom', 'Contracts an odd cycle while finding a maximum matching in a general graph.', {}, null, blossomGraph)
+            ],
             'graph/stoer_wagner': [
                 ex('Global min cut', 'Contracts supernodes until the lightest separating cut is found.', {}, null, minCutGraph)
+            ],
+            'graph/gomory_hu_tree': [
+                ex('Cut-equivalent tree', 'Builds a tree that answers all-pairs minimum-cut queries.', {}, null, minCutGraph)
             ],
             'graph/prim': [
                 ex('City MST', 'Loads weighted city roads and grows an MST from A.', { source: 'A' }, 'city_road_network')
@@ -1364,6 +1522,24 @@ class AlgorithmPanel {
             ],
             'graph/dag_longest_path': [
                 ex('Critical path', 'Finds the longest weighted path from S to T in a DAG.', { source: 'S', target: 'T' }, 'weighted_dag')
+            ],
+            'graph/dominator_tree': [
+                ex('Control-flow joins', 'Computes immediate dominators and dominance frontiers from entry S.', { source: 'S' }, null, controlFlowGraph)
+            ],
+            'graph/directed_mst': [
+                ex('Cycle contraction', 'Builds a minimum rooted arborescence and expands a contracted directed cycle.', { source: 'R' }, null, directedMstGraph)
+            ],
+            'graph/yen_k_shortest_paths': [
+                ex('Three alternatives', 'Generates ranked loopless alternatives from S to T.', { source: 'S', target: 'T', k: 3 }, null, kShortestGraph)
+            ],
+            'graph/suurballe_disjoint_paths': [
+                ex('Disjoint backup routes', 'Finds two edge-disjoint low-cost routes from S to T.', { source: 'S', target: 'T' }, null, kShortestGraph)
+            ],
+            'graph/karp_minimum_mean_cycle': [
+                ex('Low-average cycle', 'Computes DP walk costs and recovers the directed cycle with minimum average weight.', {}, null, meanCycleGraph)
+            ],
+            'graph/minimum_cycle_basis': [
+                ex('Independent light cycles', 'Builds candidate cycles and selects a minimum independent cycle basis.', {}, null, cycleBasisGraph)
             ],
             'graph/euler_path': [
                 ex('Euler trail', 'Consumes every edge exactly once with Hierholzer traversal.', { start: 'A' }, null, eulerGraph)
@@ -1553,6 +1729,10 @@ class AlgorithmPanel {
             'string/suffix_array': [
                 ex('Banana search', 'Builds suffix ranks and searches ana.', { text: 'banana', pattern: 'ana' }),
                 ex('Repeated prefix', 'Several repeated suffix prefixes make rank updates visible.', { text: 'mississippi', pattern: 'issi' })
+            ],
+            'string/suffix_automaton': [
+                ex('Clone split', 'Builds a suffix automaton and shows clone-state link rewiring.', { text: 'abcbc', query: 'bcb' }),
+                ex('Repeated substrings', 'Indexes banana and reports substring statistics.', { text: 'banana', query: 'ana' })
             ],
             'array/kadane': [
                 ex('Profit window', 'Classic maximum subarray example.', { values: '-2,1,-3,4,-1,2,1,-5,4' }),

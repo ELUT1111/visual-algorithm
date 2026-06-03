@@ -5,7 +5,7 @@ test('shows algorithm overview and filters by learning path', async ({ page }) =
   await page.goto('/');
 
   await expect(page.locator('#algorithm-overview')).toContainText('Total');
-  await expect(page.locator('#algorithm-overview')).toContainText('66');
+  await expect(page.locator('#algorithm-overview')).toContainText('75');
   await expect(page.locator('#learning-paths')).toContainText('DP Foundations');
 
   await page.locator('.learning-path', { hasText: 'DP Foundations' }).click();
@@ -713,6 +713,143 @@ test('runs dag longest path and shows critical path state', async ({ page }) => 
   await expect(page.locator('#state-content')).toContainText('topological order');
 });
 
+test('runs dominator tree and shows control-flow dominance state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('dominator_tree');
+  const dominatorCard = page.locator('.algo-card[data-key="graph/dominator_tree"]');
+  await expect(dominatorCard).toBeVisible({ timeout: 15_000 });
+  await dominatorCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Control-flow joins' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('S');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('immediate dominators');
+  await expect(page.locator('#state-content')).toContainText('dominator tree');
+  await expect(page.locator('#state-content')).toContainText('dominance frontier');
+  await expect(page.locator('#state-content')).toContainText('dominators');
+});
+
+test('runs directed mst and shows arborescence contraction state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('directed_mst');
+  const directedMstCard = page.locator('.algo-card[data-key="graph/directed_mst"]');
+  await expect(directedMstCard).toBeVisible({ timeout: 15_000 });
+  await directedMstCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Cycle contraction' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('R');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('arborescence edges');
+  await expect(page.locator('#state-content')).toContainText('total weight');
+  await expect(page.locator('#state-content')).toContainText('cycle trace');
+  await expect(page.locator('#state-content')).toContainText('contractions');
+});
+
+test('runs yen k-shortest paths and shows ranked alternatives', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('yen_k_shortest_paths');
+  const yenCard = page.locator('.algo-card[data-key="graph/yen_k_shortest_paths"]');
+  await expect(yenCard).toBeVisible({ timeout: 15_000 });
+  await yenCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Three alternatives' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('S');
+  await expect(page.locator('#param-target')).toHaveValue('T');
+  await expect(page.locator('#param-k')).toHaveValue('3');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('shortest paths');
+  await expect(page.locator('#state-content')).toContainText('candidates');
+  await expect(page.locator('#state-content')).toContainText('spur iterations');
+  await expect(page.locator('#state-content')).toContainText('cost');
+});
+
+test('runs suurballe disjoint paths and shows backup routes', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('suurballe_disjoint_paths');
+  const suurballeCard = page.locator('.algo-card[data-key="graph/suurballe_disjoint_paths"]');
+  await expect(suurballeCard).toBeVisible({ timeout: 15_000 });
+  await suurballeCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Disjoint backup routes' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-source')).toHaveValue('S');
+  await expect(page.locator('#param-target')).toHaveValue('T');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('disjoint paths');
+  await expect(page.locator('#state-content')).toContainText('residual augmentations');
+  await expect(page.locator('#state-content')).toContainText('first path');
+  await expect(page.locator('#state-content')).toContainText('total cost');
+});
+
+test('runs karp minimum mean cycle and shows cycle analysis state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('karp_minimum_mean_cycle');
+  const karpCard = page.locator('.algo-card[data-key="graph/karp_minimum_mean_cycle"]');
+  await expect(karpCard).toBeVisible({ timeout: 15_000 });
+  await karpCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Low-average cycle' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('dp table');
+  await expect(page.locator('#state-content')).toContainText('mean candidates');
+  await expect(page.locator('#state-content')).toContainText('cycle mean');
+  await expect(page.locator('#state-content')).toContainText('minimum mean cycle');
+});
+
+test('runs minimum cycle basis and shows independent cycle state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('minimum_cycle_basis');
+  const cycleBasisCard = page.locator('.algo-card[data-key="graph/minimum_cycle_basis"]');
+  await expect(cycleBasisCard).toBeVisible({ timeout: 15_000 });
+  await cycleBasisCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Independent light cycles' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('candidate cycles');
+  await expect(page.locator('#state-content')).toContainText('selection trace');
+  await expect(page.locator('#state-content')).toContainText('minimum cycle basis');
+  await expect(page.locator('#state-content')).toContainText('total weight');
+});
+
 test('runs euler path and shows edge-covering trail state', async ({ page }) => {
   await page.goto('/');
 
@@ -790,6 +927,25 @@ test('runs hopcroft-karp and shows matching state', async ({ page }) => {
   await expect(page.locator('#state-content')).toContainText('right partition');
 });
 
+test('runs blossom matching and shows odd-cycle contraction state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('blossom_matching');
+  await page.locator('.algo-card[data-key="graph/blossom_matching"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Odd-cycle blossom' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('matching size');
+  await expect(page.locator('#state-content')).toContainText('matching');
+  await expect(page.locator('#state-content')).toContainText('augmenting paths');
+  await expect(page.locator('#state-content')).toContainText('blossom trace');
+});
+
 test('runs stoer-wagner and shows global min-cut state', async ({ page }) => {
   await page.goto('/');
 
@@ -807,6 +963,27 @@ test('runs stoer-wagner and shows global min-cut state', async ({ page }) => {
   await expect(page.locator('#state-content')).toContainText('min cut edges');
   await expect(page.locator('#state-content')).toContainText('phase cuts');
   await expect(page.locator('#state-content')).toContainText('contractions');
+});
+
+test('runs gomory-hu tree and shows cut-equivalent tree state', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('gomory_hu_tree');
+  const gomoryHuCard = page.locator('.algo-card[data-key="graph/gomory_hu_tree"]');
+  await expect(gomoryHuCard).toBeVisible({ timeout: 15_000 });
+  await gomoryHuCard.click();
+  await page.locator('.example-select').selectOption({ label: 'Cut-equivalent tree' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('gomory hu tree');
+  await expect(page.locator('#state-content')).toContainText('cut iterations');
+  await expect(page.locator('#state-content')).toContainText('all pairs min cuts');
+  await expect(page.locator('#state-content')).toContainText('parents');
 });
 
 test('runs push-relabel and shows preflow state', async ({ page }) => {
@@ -892,6 +1069,28 @@ test('runs suffix array and shows suffix search state', async ({ page }) => {
   await expect(page.locator('#state-content')).toContainText('suffix array');
   await expect(page.locator('#state-content')).toContainText('matches');
   await expect(page.locator('#state-content')).toContainText('ranks');
+});
+
+test('runs suffix automaton and shows clone-state statistics', async ({ page }) => {
+  await page.goto('/');
+
+  await page.locator('#algorithm-search').fill('suffix_automaton');
+  await page.locator('.algo-card[data-key="string/suffix_automaton"]').click();
+  await page.locator('.example-select').selectOption({ label: 'Clone split' });
+  await page.getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.locator('#param-text')).toHaveValue('abcbc');
+  await expect(page.locator('#param-query')).toHaveValue('bcb');
+
+  await page.locator('#speed-slider').fill('50');
+  await page.locator('#btn-play').click();
+
+  await expect(page.locator('#status-badge')).toHaveText('Finished', { timeout: 15_000 });
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('#state-content')).toContainText('distinct substring count');
+  await expect(page.locator('#state-content')).toContainText('longest repeated substring');
+  await expect(page.locator('#state-content')).toContainText('clone trace');
+  await expect(page.locator('#state-content')).toContainText('suffix links');
 });
 
 test('runs manacher and shows palindrome radius state', async ({ page }) => {

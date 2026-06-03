@@ -46,13 +46,21 @@ class AlgorithmRegistryTests(unittest.TestCase):
         self.assertIn("graph/spfa", keys)
         self.assertIn("graph/johnson", keys)
         self.assertIn("graph/dag_longest_path", keys)
+        self.assertIn("graph/dominator_tree", keys)
+        self.assertIn("graph/directed_mst", keys)
+        self.assertIn("graph/yen_k_shortest_paths", keys)
+        self.assertIn("graph/suurballe_disjoint_paths", keys)
+        self.assertIn("graph/karp_minimum_mean_cycle", keys)
+        self.assertIn("graph/minimum_cycle_basis", keys)
         self.assertIn("graph/euler_path", keys)
         self.assertIn("graph/edmonds_karp", keys)
         self.assertIn("graph/dinic", keys)
         self.assertIn("graph/push_relabel", keys)
         self.assertIn("graph/hopcroft_karp", keys)
+        self.assertIn("graph/blossom_matching", keys)
         self.assertIn("graph/min_cost_max_flow", keys)
         self.assertIn("graph/stoer_wagner", keys)
+        self.assertIn("graph/gomory_hu_tree", keys)
         self.assertIn("array/bubble_sort", keys)
         self.assertIn("array/quick_sort", keys)
         self.assertIn("array/merge_sort", keys)
@@ -76,23 +84,24 @@ class AlgorithmRegistryTests(unittest.TestCase):
         self.assertIn("string/z_algorithm", keys)
         self.assertIn("string/manacher", keys)
         self.assertIn("string/suffix_array", keys)
+        self.assertIn("string/suffix_automaton", keys)
         self.assertIn("tree/fenwick_tree", keys)
         self.assertIn("tree/segment_tree", keys)
         self.assertIn("tree/treap", keys)
         self.assertIn("tree/lca", keys)
         self.assertIn("tree/heavy_light_decomposition", keys)
-        self.assertGreaterEqual(len(keys), 66)
+        self.assertGreaterEqual(len(keys), 75)
 
     def test_health_payload_reports_algorithm_summary(self):
         payload = _build_health_payload()
 
         self.assertEqual(payload["status"], "ok")
-        self.assertGreaterEqual(payload["algorithm_count"], 66)
-        self.assertEqual(payload["categories"].get("graph"), 26)
+        self.assertGreaterEqual(payload["algorithm_count"], 75)
+        self.assertEqual(payload["categories"].get("graph"), 34)
         self.assertEqual(payload["categories"].get("tree"), 17)
         self.assertEqual(payload["categories"].get("array"), 7)
         self.assertEqual(payload["categories"].get("dp"), 10)
-        self.assertEqual(payload["categories"].get("string"), 6)
+        self.assertEqual(payload["categories"].get("string"), 7)
         self.assertGreaterEqual(payload["visualizations"].get("graph", 0), 1)
         self.assertGreaterEqual(payload["visualizations"].get("array", 0), 1)
         self.assertGreaterEqual(payload["visualizations"].get("matrix", 0), 1)
@@ -118,6 +127,7 @@ class AlgorithmRegistryTests(unittest.TestCase):
         bipartite = registry.get("graph/bipartite").get_meta()
         bridges = registry.get("graph/bridges_articulation").get_meta()
         stoer_wagner = registry.get("graph/stoer_wagner").get_meta()
+        gomory_hu = registry.get("graph/gomory_hu_tree").get_meta()
         prim = registry.get("graph/prim").get_meta()
         kruskal = registry.get("graph/kruskal").get_meta()
 
@@ -125,6 +135,7 @@ class AlgorithmRegistryTests(unittest.TestCase):
         self.assertTrue(bipartite.requires_undirected)
         self.assertTrue(bridges.requires_undirected)
         self.assertTrue(stoer_wagner.requires_undirected)
+        self.assertTrue(gomory_hu.requires_undirected)
         self.assertTrue(prim.requires_undirected)
         self.assertTrue(kruskal.requires_undirected)
 
@@ -144,6 +155,7 @@ class AlgorithmRegistryTests(unittest.TestCase):
         kmp = registry.get("string/kmp").get_meta()
         manacher = registry.get("string/manacher").get_meta()
         suffix_array = registry.get("string/suffix_array").get_meta()
+        suffix_automaton = registry.get("string/suffix_automaton").get_meta()
         fenwick = registry.get("tree/fenwick_tree").get_meta()
         segment_tree = registry.get("tree/segment_tree").get_meta()
 
@@ -177,6 +189,8 @@ class AlgorithmRegistryTests(unittest.TestCase):
         self.assertEqual(manacher.visualization, "array")
         self.assertFalse(suffix_array.requires_graph)
         self.assertEqual(suffix_array.visualization, "array")
+        self.assertFalse(suffix_automaton.requires_graph)
+        self.assertEqual(suffix_automaton.visualization, "graph")
         self.assertFalse(fenwick.requires_graph)
         self.assertEqual(fenwick.visualization, "array")
         self.assertFalse(segment_tree.requires_graph)
@@ -322,6 +336,166 @@ class NewGraphAlgorithmTests(unittest.TestCase):
         self.assertEqual(state.get("critical_path"), ["S", "A", "D", "T"])
         self.assertIn("topological_order", state)
         self.assertIn("distances", state)
+
+    def test_dominator_tree_computes_immediate_dominators_and_frontiers(self):
+        graph = make_graph(
+            directed=True,
+            nodes=["S", "A", "B", "C", "D", "E", "T"],
+            edges=[
+                ("S", "A", 1),
+                ("S", "B", 1),
+                ("A", "C", 1),
+                ("B", "C", 1),
+                ("C", "D", 1),
+                ("C", "E", 1),
+                ("D", "T", 1),
+                ("E", "T", 1),
+            ],
+        )
+
+        steps = list(registry.get("graph/dominator_tree").run(graph, {"source": "S"}))
+        state = steps[-1].state
+
+        self.assertEqual(state.get("source"), "S")
+        self.assertEqual(
+            state.get("immediate_dominators"),
+            {"A": "S", "B": "S", "C": "S", "D": "C", "E": "C", "T": "C"},
+        )
+        self.assertEqual(state.get("dominators", {}).get("T"), ["S", "C", "T"])
+        self.assertEqual(state.get("dominance_frontier", {}).get("A"), ["C"])
+        self.assertEqual(state.get("dominance_frontier", {}).get("D"), ["T"])
+        self.assertEqual(len(state.get("dominator_tree", [])), 6)
+
+    def test_directed_mst_contracts_cycle_and_expands_arborescence(self):
+        graph = make_graph(
+            directed=True,
+            nodes=["R", "A", "B", "C", "D"],
+            edges=[
+                ("R", "A", 4),
+                ("R", "B", 6),
+                ("R", "D", 10),
+                ("A", "B", 1),
+                ("B", "C", 1),
+                ("C", "A", 1),
+                ("C", "D", 1),
+                ("A", "D", 4),
+            ],
+        )
+
+        steps = list(registry.get("graph/directed_mst").run(graph, {"source": "R"}))
+        state = steps[-1].state
+        result_edges = {row["edge"] for row in state.get("arborescence_edges", [])}
+
+        self.assertEqual(state.get("root"), "R")
+        self.assertEqual(state.get("total_weight"), 7)
+        self.assertEqual(result_edges, {"R-A", "A-B", "B-C", "C-D"})
+        self.assertTrue(state.get("cycle_trace"))
+        self.assertTrue(state.get("contractions"))
+
+    def test_yen_k_shortest_paths_returns_ranked_alternatives(self):
+        graph = make_graph(
+            directed=True,
+            nodes=["S", "A", "B", "C", "D", "T"],
+            edges=[
+                ("S", "A", 1),
+                ("S", "B", 1),
+                ("A", "C", 1),
+                ("B", "C", 1),
+                ("A", "D", 2),
+                ("B", "D", 2),
+                ("C", "T", 1),
+                ("D", "T", 1),
+                ("C", "D", 1),
+            ],
+        )
+
+        steps = list(registry.get("graph/yen_k_shortest_paths").run(graph, {"source": "S", "target": "T", "k": 3}))
+        state = steps[-1].state
+        paths = state.get("shortest_paths", [])
+
+        self.assertEqual([row["cost"] for row in paths], [3, 3, 4])
+        self.assertEqual(paths[0]["path"], ["S", "A", "C", "T"])
+        self.assertEqual(paths[1]["path"], ["S", "B", "C", "T"])
+        self.assertEqual(len(paths), 3)
+        self.assertTrue(state.get("spur_iterations"))
+
+    def test_suurballe_disjoint_paths_finds_two_edge_disjoint_routes(self):
+        graph = make_graph(
+            directed=True,
+            nodes=["S", "A", "B", "C", "D", "T"],
+            edges=[
+                ("S", "A", 1),
+                ("A", "C", 1),
+                ("C", "T", 1),
+                ("S", "B", 1),
+                ("B", "D", 1),
+                ("D", "T", 1),
+                ("A", "D", 3),
+                ("B", "C", 3),
+            ],
+        )
+
+        steps = list(registry.get("graph/suurballe_disjoint_paths").run(graph, {"source": "S", "target": "T"}))
+        state = steps[-1].state
+        paths = state.get("disjoint_paths", [])
+        path_edges = {tuple(row["edges"]) for row in paths}
+
+        self.assertEqual(state.get("total_cost"), 6)
+        self.assertEqual(len(paths), 2)
+        self.assertEqual(path_edges, {("S-A", "A-C", "C-T"), ("S-B", "B-D", "D-T")})
+        self.assertIn("first_path", state)
+        self.assertEqual(len(state.get("residual_augmentations", [])), 2)
+
+    def test_karp_minimum_mean_cycle_finds_lowest_average_cycle(self):
+        graph = make_graph(
+            directed=True,
+            nodes=["A", "B", "C", "D"],
+            edges=[
+                ("A", "B", 4),
+                ("B", "C", 4),
+                ("C", "A", 4),
+                ("C", "D", 1),
+                ("D", "C", 1),
+                ("A", "D", 6),
+            ],
+        )
+
+        steps = list(registry.get("graph/karp_minimum_mean_cycle").run(graph, {}))
+        state = steps[-1].state
+
+        self.assertEqual(state.get("cycle_mean"), 1)
+        self.assertEqual(state.get("minimum_mean_cycle"), ["C", "D", "C"])
+        self.assertEqual(set(state.get("minimum_mean_cycle_edges", [])), {"C-D", "D-C"})
+        self.assertIn("dp_table", state)
+        self.assertTrue(state.get("mean_candidates"))
+
+    def test_minimum_cycle_basis_selects_independent_light_cycles(self):
+        graph = make_graph(
+            directed=False,
+            nodes=["A", "B", "C", "D"],
+            edges=[
+                ("A", "B", 1),
+                ("B", "C", 1),
+                ("C", "D", 1),
+                ("D", "A", 1),
+                ("A", "C", 1),
+            ],
+        )
+
+        steps = list(registry.get("graph/minimum_cycle_basis").run(graph, {}))
+        state = steps[-1].state
+        basis = state.get("minimum_cycle_basis", [])
+        basis_edges = {frozenset(row["edges"]) for row in basis}
+
+        self.assertEqual(state.get("cycle_rank"), 2)
+        self.assertEqual(state.get("total_weight"), 6)
+        self.assertEqual(len(basis), 2)
+        self.assertEqual(
+            basis_edges,
+            {frozenset({"A-B", "B-C", "A-C"}), frozenset({"D-A", "C-D", "A-C"})},
+        )
+        self.assertTrue(state.get("candidate_cycles"))
+        self.assertTrue(state.get("selection_trace"))
 
     def test_euler_path_uses_every_edge_once(self):
         graph = make_graph(
@@ -648,6 +822,28 @@ class NewGraphAlgorithmTests(unittest.TestCase):
         self.assertIn("left_partition", steps[-1].state)
         self.assertIn("right_partition", steps[-1].state)
 
+    def test_blossom_matching_handles_odd_cycle(self):
+        graph = make_graph(
+            directed=False,
+            nodes=["A", "B", "C", "D", "E"],
+            edges=[
+                ("A", "B", 1),
+                ("B", "C", 1),
+                ("C", "A", 1),
+                ("A", "D", 1),
+                ("B", "E", 1),
+            ],
+        )
+
+        steps = list(registry.get("graph/blossom_matching").run(graph, {}))
+        state = steps[-1].state
+
+        self.assertEqual(state.get("matching_size"), 2)
+        self.assertIn("augmenting_paths", state)
+        self.assertIn("blossom_trace", state)
+        self.assertIn("alternating_forest", state)
+        self.assertTrue(state.get("blossom_trace"))
+
     def test_min_cost_max_flow_computes_flow_and_cost(self):
         graph = Graph(
             directed=True,
@@ -691,6 +887,34 @@ class NewGraphAlgorithmTests(unittest.TestCase):
         self.assertIn("phase_cuts", state)
         self.assertIn("contractions", state)
         self.assertEqual({edge["edge"] for edge in state.get("min_cut_edges", [])}, {"C-E", "D-F"})
+
+    def test_gomory_hu_tree_answers_all_pairs_min_cuts(self):
+        graph = make_graph(
+            directed=False,
+            nodes=["A", "B", "C", "D", "E", "F"],
+            edges=[
+                ("A", "B", 4),
+                ("A", "C", 3),
+                ("B", "D", 3),
+                ("C", "D", 4),
+                ("C", "E", 1),
+                ("D", "F", 1),
+                ("E", "F", 5),
+            ],
+        )
+
+        steps = list(registry.get("graph/gomory_hu_tree").run(graph, {}))
+        state = steps[-1].state
+        pair_values = {
+            (row["source"], row["target"]): row["min_cut"]
+            for row in state.get("all_pairs_min_cuts", [])
+        }
+
+        self.assertEqual(len(state.get("gomory_hu_tree", [])), 5)
+        self.assertEqual(pair_values.get(("A", "E")), 2)
+        self.assertEqual(pair_values.get(("E", "F")), 6)
+        self.assertIn("cut_iterations", state)
+        self.assertEqual(len(state.get("cut_iterations", [])), 5)
 
     def test_bubble_sort_sorts_array(self):
         steps = list(registry.get("array/bubble_sort").run(Graph(), {"values": "5,1,4,2"}))
@@ -1156,6 +1380,18 @@ class NewGraphAlgorithmTests(unittest.TestCase):
         self.assertEqual(steps[0].action.value, "render_array")
         self.assertEqual(steps[-1].state.get("suffix_array"), [5, 3, 1, 0, 4, 2])
         self.assertEqual(steps[-1].state.get("matches"), [1, 3])
+
+    def test_suffix_automaton_builds_substring_index(self):
+        steps = list(registry.get("string/suffix_automaton").run(Graph(), {"text": "abcbc", "query": "bcb"}))
+        state = steps[-1].state
+
+        self.assertEqual(state.get("distinct_substring_count"), 12)
+        self.assertEqual(state.get("longest_repeated_substring"), "bc")
+        self.assertTrue(state.get("query_found"))
+        self.assertIn("suffix_links", state)
+        self.assertIn("transition_table", state)
+        self.assertIn("clone_trace", state)
+        self.assertTrue(state.get("clone_trace"))
 
 
 if __name__ == "__main__":
