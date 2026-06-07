@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0"
+  },
+  "dependencies": {
+    "vis-network": "^9.1.9"
   }
 }

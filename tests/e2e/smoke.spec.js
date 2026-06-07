@@ -70,6 +70,27 @@ test('pins favorite algorithms and keeps recent selections', async ({ page }) =>
   await expect(page.locator('#status-badge')).toContainText('binary_search');
 });
 
+test('toggles algorithm education language', async ({ page }) => {
+  const algorithmsResponse = page.waitForResponse(resp => resp.url().endsWith('/api/algorithms') && resp.ok());
+  await page.goto('/');
+
+  await algorithmsResponse;
+  await page.waitForFunction(() => document.querySelectorAll('#algorithm-list .algo-card').length >= 75, null, { timeout: 30_000 });
+  await page.locator('#algorithm-search').fill('dijkstra');
+  await expect(page.locator('.algo-card[data-key="graph/dijkstra"]')).toBeVisible();
+  await page.locator('.algo-card[data-key="graph/dijkstra"]').click();
+
+  await expect(page.locator('#edu-section')).toBeVisible();
+  await expect(page.locator('#edu-summary-label')).toHaveText('Summary');
+
+  await page.locator('[data-edu-lang="zh"]').click();
+  await expect(page.locator('#edu-summary-label')).not.toHaveText('Summary');
+  await expect(page.locator('#edu-summary-label')).toHaveText(/概述|姒傝堪/);
+
+  await page.locator('[data-edu-lang="en"]').click();
+  await expect(page.locator('#edu-summary-label')).toHaveText('Summary');
+});
+
 test('loads, searches, runs an array algorithm, replays timeline, exports and imports run JSON', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem('val_savedRunRecords');

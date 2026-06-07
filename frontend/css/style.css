@@ -2061,6 +2061,50 @@ html, body {
     padding: 2px 8px;
     border-radius: 4px;
 }
+.edu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.edu-lang-toggle {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.edu-lang-btn {
+    min-height: 24px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.edu-lang-btn:hover {
+    border-color: var(--border-light);
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.edu-lang-btn.active {
+    border-color: var(--accent-cyan);
+    background: rgba(34, 211, 238, 0.1);
+    color: var(--accent-cyan);
+}
+
+.edu-text {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .edu-list {
     list-style: none;
     padding: 0;

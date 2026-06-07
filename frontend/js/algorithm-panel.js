@@ -1,4 +1,4 @@
-/* ===== Algorithm Panel - Selector + Controls ===== */
+﻿/* ===== Algorithm Panel - Selector + Controls ===== */
 
 class AlgorithmPanel {
     constructor(wsClient, visualizer, graphEditor) {
@@ -14,6 +14,7 @@ class AlgorithmPanel {
         this.searchQuery = '';
         this.selectedLearningPath = 'all';
         this.selectedAlgorithmTag = 'all';
+        this.eduLanguage = 'en';
         this.categoryCollapsed = new Set();
         this.exampleInputs = this._buildExampleInputs();
         this.learningPaths = this._buildLearningPaths();
@@ -53,6 +54,7 @@ class AlgorithmPanel {
         this._setupLogFilters();
         this._setupRunHistory();
         this._setupPanelToggles();
+        this._setupEduLanguageToggle();
         this._setupWSHandlers();
         this._renderRunHistory();
     }
@@ -1747,7 +1749,9 @@ class AlgorithmPanel {
 
     _renderEduPanel(algo) {
         const section = document.getElementById('edu-section');
-        const hasEdu = algo.time_complexity || (algo.use_cases && algo.use_cases.length > 0) || algo.pseudocode;
+        const education = algo.education || {};
+        const content = education[this.eduLanguage] || education.en || {};
+        const hasEdu = algo.time_complexity || (algo.use_cases && algo.use_cases.length > 0) || algo.pseudocode || content.summary || content.idea || content.implementation;
         if (!hasEdu) {
             section.style.display = 'none';
             return;
@@ -1755,22 +1759,40 @@ class AlgorithmPanel {
 
         section.style.display = 'block';
         document.getElementById('edu-title').textContent = `${algo.emoji} ${algo.name}`;
+        this._syncEduLanguageButtons();
 
         const timeEl = document.getElementById('edu-time');
         const spaceEl = document.getElementById('edu-space');
         timeEl.textContent = algo.time_complexity || '—';
         spaceEl.textContent = algo.space_complexity || '—';
 
+        const summaryLabel = document.getElementById('edu-summary-label');
+        const ideaLabel = document.getElementById('edu-idea-label');
+        const implLabel = document.getElementById('edu-impl-label');
+        const codeLabel = document.getElementById('edu-code-label');
+        const labels = content.labels || {};
+        if (summaryLabel) summaryLabel.textContent = labels.summary || 'Summary';
+        if (ideaLabel) ideaLabel.textContent = labels.idea || 'Core idea';
+        if (implLabel) implLabel.textContent = labels.implementation || 'Implementation';
+        if (codeLabel) codeLabel.textContent = labels.example_code || 'Example code';
+
+        const summaryEl = document.getElementById('edu-summary');
+        const ideaEl = document.getElementById('edu-idea');
+        const implEl = document.getElementById('edu-implementation');
+        if (summaryEl) summaryEl.textContent = content.summary || algo.description || '';
+        if (ideaEl) ideaEl.textContent = content.idea || '';
+        if (implEl) implEl.textContent = content.implementation || '';
+
         const listEl = document.getElementById('edu-usecases');
         listEl.innerHTML = '';
-        (algo.use_cases || []).forEach(uc => {
+        (content.use_cases || algo.use_cases || []).forEach(uc => {
             const li = document.createElement('li');
             li.textContent = uc;
             listEl.appendChild(li);
         });
 
         const codeEl = document.getElementById('edu-pseudocode');
-        codeEl.textContent = algo.pseudocode || '';
+        codeEl.textContent = content.example_code || algo.pseudocode || '';
 
         this._renderNextAlgorithms(algo);
     }
@@ -2220,6 +2242,20 @@ class AlgorithmPanel {
         });
     }
 
+    _setupEduLanguageToggle() {
+        document.querySelectorAll('[data-edu-lang]').forEach(button => {
+            button.addEventListener('click', () => {
+                const lang = button.dataset.eduLang;
+                if (!lang || lang === this.eduLanguage) return;
+                this.eduLanguage = lang;
+                this._syncEduLanguageButtons();
+                const algo = this._findAlgorithmByKey(this.selectedAlgorithm);
+                if (algo) this._renderEduPanel(algo);
+            });
+        });
+        this._syncEduLanguageButtons();
+    }
+
     _setPanelCollapsed(panelId, collapsed) {
         if (collapsed) {
             this.collapsedPanels.add(panelId);
@@ -2240,6 +2276,14 @@ class AlgorithmPanel {
             button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             button.title = `${collapsed ? 'Expand' : 'Collapse'} ${this._panelLabel(panelId)}`;
         }
+    }
+
+    _syncEduLanguageButtons() {
+        document.querySelectorAll('[data-edu-lang]').forEach(button => {
+            const active = button.dataset.eduLang === this.eduLanguage;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     }
 
     _panelLabel(panelId) {
@@ -3884,3 +3928,4 @@ class AlgorithmPanel {
         }
     }
 }
+

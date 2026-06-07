@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Generator
 
+from backend.engine.education import build_education_content
+
 if TYPE_CHECKING:
     from backend.models.graph import Graph
 
@@ -81,6 +83,7 @@ class AlgorithmMeta:
     space_complexity: str = ""
     use_cases: list[str] = field(default_factory=list)
     pseudocode: str = ""
+    education: dict[str, dict[str, object]] = field(default_factory=dict)
     layout: str = "force"  # "force" or "hierarchical"
     visualization: str = "graph"  # "graph", "array", "matrix"
 
@@ -102,6 +105,7 @@ class AlgorithmMeta:
             "space_complexity": self.space_complexity,
             "use_cases": self.use_cases,
             "pseudocode": self.pseudocode,
+            "education": self.education or build_education_content(self),
             "layout": self.layout,
             "visualization": self.visualization,
         }

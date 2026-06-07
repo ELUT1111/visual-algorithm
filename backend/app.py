@@ -44,6 +44,7 @@ app.include_router(ws_algorithm.router, tags=["websocket"])
 # Serve frontend static files
 frontend_dir = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+app.mount("/vendor", StaticFiles(directory=str(Path(__file__).parent.parent / "node_modules")), name="vendor")
 
 
 def _build_health_payload() -> dict:

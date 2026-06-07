@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css?v=22">
-    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <script src="/vendor/vis-network/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
     <header id="app-header">
@@ -43,7 +43,13 @@
 
             <!-- Algorithm Education Panel -->
             <section class="sidebar-section" id="edu-section" style="display:none;">
-                <h3><span class="emoji-icon">📖</span> <span id="edu-title">Algorithm Info</span></h3>
+                <div class="edu-header">
+                    <h3><span class="emoji-icon">📚</span> <span id="edu-title">Algorithm Info</span></h3>
+                    <div class="edu-lang-toggle" role="tablist" aria-label="Education language">
+                        <button class="edu-lang-btn active" type="button" data-edu-lang="en">EN</button>
+                        <button class="edu-lang-btn" type="button" data-edu-lang="zh">中文</button>
+                    </div>
+                </div>
                 <div id="edu-content">
                     <div class="edu-row">
                         <span class="edu-label">Time</span>
@@ -54,11 +60,23 @@
                         <span class="edu-value edu-mono" id="edu-space"></span>
                     </div>
                     <div class="edu-block">
+                        <div class="edu-label" id="edu-summary-label">Summary</div>
+                        <div id="edu-summary" class="edu-text"></div>
+                    </div>
+                    <div class="edu-block">
+                        <div class="edu-label" id="edu-idea-label">Core idea</div>
+                        <div id="edu-idea" class="edu-text"></div>
+                    </div>
+                    <div class="edu-block">
+                        <div class="edu-label" id="edu-impl-label">Implementation</div>
+                        <div id="edu-implementation" class="edu-text"></div>
+                    </div>
+                    <div class="edu-block">
                         <div class="edu-label">Use Cases</div>
                         <ul id="edu-usecases" class="edu-list"></ul>
                     </div>
                     <div class="edu-block">
-                        <div class="edu-label">Pseudocode</div>
+                        <div class="edu-label" id="edu-code-label">Example code</div>
                         <pre id="edu-pseudocode" class="edu-code"></pre>
                     </div>
                     <div class="edu-block">
@@ -67,7 +85,6 @@
                     </div>
                 </div>
             </section>
-
             <!-- Preset Graphs -->
             <section class="sidebar-section" id="preset-section">
                 <h3><span class="emoji-icon">📁</span> Preset Graphs</h3>
@@ -267,9 +284,10 @@
     <script src="/static/js/ws-client.js?v=3"></script>
     <script src="/static/js/graph-editor.js?v=11"></script>
     <script src="/static/js/visualizer.js?v=10"></script>
-    <script src="/static/js/algorithm-panel.js?v=38"></script>
+    <script src="/static/js/algorithm-panel.js?v=39"></script>
     <script src="/static/js/code-editor.js?v=4"></script>
     <script src="/static/js/preset-manager.js?v=8"></script>
     <script src="/static/js/app.js?v=9"></script>
 </body>
 </html>
+

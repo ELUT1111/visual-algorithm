@@ -106,6 +106,22 @@ class AlgorithmRegistryTests(unittest.TestCase):
         self.assertGreaterEqual(payload["visualizations"].get("array", 0), 1)
         self.assertGreaterEqual(payload["visualizations"].get("matrix", 0), 1)
 
+    def test_algorithm_metadata_includes_bilingual_education(self):
+        metas = registry.list_all()
+
+        self.assertGreaterEqual(len(metas), 75)
+        for meta in metas:
+            data = meta.to_dict()
+            education = data.get("education", {})
+            self.assertIn("en", education)
+            self.assertIn("zh", education)
+            self.assertTrue(education["en"].get("summary"))
+            self.assertTrue(education["zh"].get("summary"))
+            self.assertTrue(education["en"].get("idea"))
+            self.assertTrue(education["zh"].get("idea"))
+            self.assertIn("labels", education["en"])
+            self.assertIn("labels", education["zh"])
+
     def test_metadata_separates_layout_from_structure_building(self):
         bst = registry.get("tree/bst").get_meta()
         tree_bfs = registry.get("tree/tree_bfs").get_meta()
